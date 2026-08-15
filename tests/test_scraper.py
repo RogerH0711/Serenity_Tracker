@@ -26,8 +26,9 @@ class FakeTimeElement:
 
 
 class FakeArticle:
-    def __init__(self, texts: list[str]) -> None:
+    def __init__(self, texts: list[str], show_more: bool = False) -> None:
         self.texts = texts
+        self.show_more = show_more
 
     async def query_selector_all(self, selector: str):
         if selector == 'div[data-testid="tweetText"]':
@@ -37,6 +38,8 @@ class FakeArticle:
     async def query_selector(self, selector: str):
         if selector == "time":
             return FakeTimeElement()
+        if selector == '[data-testid="tweet-text-show-more-link"]' and self.show_more:
+            return object()
         return None
 
 
@@ -61,6 +64,12 @@ class ScraperContextTest(unittest.IsolatedAsyncioTestCase):
             "Yes, I'm still bullish on memory like $MU / Samsung.",
         )
         self.assertEqual(post["post_id"], "2088226398708338889")
+
+    async def test_marks_long_post_for_isolated_full_text_fetch(self) -> None:
+        post = await _extract_post(FakeArticle(["$MU truncated"], show_more=True))
+
+        self.assertEqual(post["_needs_full_text"], "1")
+
 
 
 if __name__ == "__main__":

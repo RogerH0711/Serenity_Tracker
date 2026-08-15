@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from playwright.async_api import ElementHandle, Page, async_playwright
+from playwright.async_api import BrowserContext, ElementHandle, Page, async_playwright
 
 from common import (
     PROJECT_DIR,
@@ -66,13 +66,64 @@ async def _extract_post(article: ElementHandle) -> dict[str, str] | None:
     if not is_safe_x_url(url):
         return None
 
+    show_more = await article.query_selector(
+        '[data-testid="tweet-text-show-more-link"]'
+    )
+
     return {
         "post_id": post_id,
         "timestamp": timestamp,
         "text": text,
         "context": "\n\n".join(context_parts),
         "url": url,
+        "_needs_full_text": "1" if show_more else "",
     }
+
+
+async def _find_post_on_page(
+    page: Page,
+    post_id: str,
+) -> dict[str, str] | None:
+    articles = await page.query_selector_all('article[data-testid="tweet"]')
+    for article in articles:
+        candidate = await _extract_post(article)
+        if candidate and candidate["post_id"] == post_id:
+            return candidate
+    return None
+
+
+async def _hydrate_long_posts(
+    context: BrowserContext,
+    posts: list[dict[str, str]],
+) -> None:
+    """Read truncated posts on an isolated detail page without navigating profile."""
+    targets = [post for post in posts if post.pop("_needs_full_text", "")]
+    if not targets:
+        return
+    detail_page = await context.new_page()
+    try:
+        for post in targets:
+            try:
+                await detail_page.goto(
+                    post["url"],
+                    wait_until="domcontentloaded",
+                    timeout=30_000,
+                )
+                await detail_page.wait_for_selector(
+                    'article[data-testid="tweet"]',
+                    timeout=15_000,
+                )
+                full_post = await _find_post_on_page(detail_page, post["post_id"])
+                if full_post and len(full_post["text"]) > len(post["text"]):
+                    post["text"] = full_post["text"]
+                    post["context"] = full_post["context"]
+            except Exception as error:
+                print(
+                    f"警告：無法取得長貼文 {post['post_id']} 全文，"
+                    f"將使用時間軸文字：{error}"
+                )
+    finally:
+        await detail_page.close()
 
 
 async def _collect_visible_posts(
@@ -150,6 +201,10 @@ async def scrape_tweets(
             )[:max_posts]
             if not tweets:
                 raise RuntimeError("沒有取得任何有效貼文；保留既有 raw_tweets.json")
+
+            await _hydrate_long_posts(context, tweets)
+            for tweet in tweets:
+                tweet.pop("_needs_full_text", None)
 
             atomic_write_json(output_path, tweets)
             print(f"抓取完成：原子寫入 {len(tweets)} 則貼文至 {output_path.name}")

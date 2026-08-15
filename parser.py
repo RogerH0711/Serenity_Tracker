@@ -151,7 +151,10 @@ def _normalize_analysis(
         normalized_source = _normalize_for_evidence_match(source_text)
         normalized_evidence = _normalize_for_evidence_match(evidence)
         if normalized_evidence not in normalized_source:
-            raise ValueError(f"{ticker} 的 sentiment_evidence 並非輸入原文逐字摘錄")
+            raise ValueError(
+                f"{ticker} 的 sentiment_evidence 並非輸入原文逐字摘錄："
+                f"{evidence[:160]!r}"
+            )
         risks = mention.risks.strip() if mention.risks else None
         if risks and len(risks) > 300:
             raise ValueError(f"{ticker} 的 risks 超過 300 字")
@@ -171,7 +174,21 @@ def _normalize_analysis(
 
 def _normalize_for_evidence_match(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
-    return re.sub(r"\s+", " ", normalized).strip()
+    normalized = normalized.translate(
+        str.maketrans(
+            {
+                "’": "'",
+                "‘": "'",
+                "“": '"',
+                "”": '"',
+                "…": "...",
+                "–": "-",
+                "—": "-",
+            }
+        )
+    )
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return re.sub(r"\s*([,.;:!?/，。；：！？])\s*", r"\1", normalized)
 
 
 def analyze_post(

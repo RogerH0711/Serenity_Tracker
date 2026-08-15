@@ -119,6 +119,25 @@ class ParserValidationTest(unittest.TestCase):
                 "$MU memory bottleneck never changed",
             )
 
+    def test_accepts_evidence_with_equivalent_linebreak_and_punctuation_spacing(self) -> None:
+        analysis = TweetAnalysis(
+            mentions=[
+                MentionAnalysis(
+                    ticker="MU",
+                    sentiment="Bullish",
+                    sentiment_evidence="$MU, $SKHY, and Samsung are happy to hear this…",
+                    thesis="作者認為非中國記憶體供應商受惠。",
+                    risks=None,
+                )
+            ]
+        )
+        result = _normalize_analysis(
+            analysis,
+            ["MU"],
+            "$MU\n,\n$SKHY\n, and Samsung are happy to hear this...",
+        )
+        self.assertEqual(result[0]["sentiment"], "Bullish")
+
     def test_second_run_does_not_call_model_or_duplicate_mentions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
