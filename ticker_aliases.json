@@ -1,0 +1,27 @@
+{
+  "005930.KS": {
+    "aliases": ["005930", "SSNLF"],
+    "company_name": "Samsung Electronics",
+    "exchange": "KRX"
+  },
+  "009150.KS": {
+    "aliases": ["009150"],
+    "company_name": "Samsung Electro-Mechanics",
+    "exchange": "KRX"
+  },
+  "300308.SZ": {
+    "aliases": ["300308"],
+    "company_name": "Zhongji Innolight",
+    "exchange": "SZSE"
+  },
+  "SHKY": {
+    "aliases": ["SKHY", "SK HYNIX"],
+    "company_name": "SK hynix",
+    "exchange": ""
+  },
+  "SIVE": {
+    "aliases": ["SIVEF"],
+    "company_name": "Sivers Semiconductors",
+    "exchange": ""
+  }
+}

@@ -1,17 +1,24 @@
-cat <<EOT >> .gitignore
-# 虛擬環境
+# Virtual environments and Python caches
 venv/
+.venv/
 __pycache__/
+*.py[cod]
 
-# 環境變數與機密資訊
+# Secrets
 .env
 
-# 資料庫與日誌
+# Runtime data and logs
 serenity.db
+serenity.db-*
 pipeline.log
-
-# 本機端暫存資料檔案（選擇性，建議不放入版本控制）
 raw_tweets.json
 parsed_tweets.json
+backups/
+.pipeline.lock
+
+# Test/tool caches
+.pytest_cache/
+.coverage
+
+# macOS
 .DS_Store
-EOT

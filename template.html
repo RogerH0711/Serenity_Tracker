@@ -1,69 +1,737 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>@aleabitoreddit — Stock Opinion Tracker</title>
+<meta name="color-scheme" content="light">
+<meta name="description" content="Serenity 公開貼文的股票立場、論點演變與風險追蹤儀表板">
+<title>Serenity Stock Tracker</title>
 <style>
-/* 核心樣式保留，避免版面過度複雜化 */
-:root{--paper:#f4f1ea;--card:#fbf9f4;--ink:#1c1a17;--ink-soft:#55514a;--ink-faint:#8a8479;--line:#dcd6c8;--line-strong:#c6bfae;--accent:#1f5c4d;--accent-soft:#e3ede8;--bull:#1f7a4d;--bull-bg:#e6f1e9;--bear:#a8392b;--bear-bg:#f4e3df;--shadow:0 1px 0 rgba(0,0,0,.04),0 10px 28px -18px rgba(28,26,23,.38);}
-body{background:var(--paper);font-family:sans-serif;color:var(--ink);display:flex;margin:0}
-.sidenav{position:fixed;left:0;top:0;bottom:0;width:180px;background:var(--card);border-right:2px solid var(--ink);padding:26px 0;display:flex;flex-direction:column;z-index:10}
-.main{margin-left:180px;flex:1;padding:30px 44px}
-.st{font-weight:900;font-size:30px; border-bottom:2px solid var(--ink); padding-bottom:12px; margin-bottom: 20px;}
-.wall{display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:16px;}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px;box-shadow:var(--shadow);cursor:pointer;}
-.card:hover{transform:translateY(-2px);border-color:var(--accent);}
-.tk{font-weight:600;font-size:21px;}
-.badge{float:right; font-weight:700;font-size:13.5px;padding:6px 12px;border-radius:5px;}
-.badge.bull{background:var(--bull-bg);color:var(--bull);}
-.badge.bear{background:var(--bear-bg);color:var(--bear);}
-.badge.neutral{background:var(--line-strong);color:var(--ink-soft);}
-.csumm{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:15px 0;}
-/* 彈出視窗樣式 */
-#ddPage{display:none;position:fixed;inset:0;z-index:200;background:var(--paper);overflow-y:auto}
-.ddbar{position:sticky;top:0;background:var(--paper);border-bottom:1px solid var(--line);padding:11px 28px;z-index:5}
-#ddBody{max-width:800px;margin:0 auto;padding:40px}
-.post{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--card)}
+:root{--paper:#f3f0e9;--panel:#faf8f3;--card:#fffdf8;--ink:#1b1916;--ink-soft:#5c574f;--ink-faint:#8c8579;--line:#ddd6c8;--line-strong:#bdb4a3;--accent:#1f5c4d;--accent-soft:#dfeae5;--bull:#147348;--bull-bg:#e4f1e9;--bear:#ad3d2f;--bear-bg:#f5e5e1;--neutral:#766f63;--neutral-bg:#e9e5dc;--warning:#a96710;--shadow:0 1px 0 rgba(0,0,0,.04),0 14px 32px -24px rgba(28,26,23,.5);--sidebar:278px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;color:var(--ink);margin:0;min-height:100vh}
+button,input,select{font:inherit}
+button{color:inherit}
+a{color:var(--accent)}
+.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);overflow-y:auto;background:var(--panel);border-right:1px solid var(--line-strong);padding:26px 22px;z-index:20}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:10px}.brand-name{font-size:19px;font-weight:850;letter-spacing:-.03em}.brand-mark{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
+.subtitle{display:block;margin:8px 0 24px;color:var(--ink-faint);font-size:12px;line-height:1.5}
+.side-section{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.side-label{display:block;color:var(--ink-faint);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px}
+.query-form{display:grid;grid-template-columns:1fr auto;gap:7px}.query-input{min-width:0;width:100%;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);padding:10px 11px;outline:none}.query-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.query-submit{border:0;border-radius:8px;background:var(--ink);color:white;padding:0 12px;cursor:pointer;font-weight:750}.query-help{font-size:10px;line-height:1.5;color:var(--ink-faint);margin:7px 2px 0}
+.period-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.period-button{border:1px solid var(--line);background:transparent;border-radius:7px;padding:7px 2px;cursor:pointer;font-size:12px}.period-button.active{background:var(--ink);border-color:var(--ink);color:white;font-weight:800}
+.filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.filter-button{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:8px 7px;text-align:left;cursor:pointer;font-size:11px}.filter-button.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:800}.filter-button.bull.active{border-color:var(--bull);background:var(--bull-bg);color:var(--bull)}.filter-button.bear.active{border-color:var(--bear);background:var(--bear-bg);color:var(--bear)}
+.toggle-row{display:flex;align-items:center;gap:7px;margin-top:9px}.toggle-row input{accent-color:var(--accent)}.toggle-row label{font-size:12px;color:var(--ink-soft);cursor:pointer}
+.sort-select{width:100%;border:1px solid var(--line);border-radius:7px;background:var(--card);padding:8px;color:var(--ink-soft)}
+.recent-list{display:grid;gap:5px}.recent-button{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:5px 2px;cursor:pointer;text-align:left}.recent-button:hover .recent-ticker{color:var(--accent)}.recent-ticker{font-size:12px;font-weight:800}.recent-date{font-size:10px;color:var(--ink-faint)}.empty-recent{font-size:11px;color:var(--ink-faint)}
+.data-note{font-size:10px;line-height:1.55;color:var(--ink-faint)}
+.main{margin-left:var(--sidebar);padding:38px 42px 70px;min-height:100vh}.main-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;border-bottom:2px solid var(--ink);padding-bottom:16px}.eyebrow{font-size:11px;color:var(--accent);font-weight:850;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}.page-title{font-size:clamp(29px,4vw,46px);letter-spacing:-.055em;line-height:1;margin:0}.header-meta{text-align:right;font-size:11px;color:var(--ink-faint);line-height:1.6}
+.query-status{min-height:22px;margin:13px 0 5px;color:var(--accent);font-size:12px;font-weight:700}.query-status:empty{margin-top:5px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.stat{border:1px solid var(--line);background:rgba(255,253,248,.7);border-radius:9px;padding:13px 15px}.stat-label{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em}.stat-value{font-size:22px;font-weight:850;margin-top:3px;letter-spacing:-.03em}.stat-detail{font-size:10px;color:var(--ink-faint);margin-top:2px}
+.result-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 12px}.result-count{font-size:12px;color:var(--ink-soft)}.clear-button{border:0;background:transparent;color:var(--accent);font-size:11px;cursor:pointer;padding:5px}.clear-button[hidden]{display:none}
+.wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:14px}.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-height:220px;transition:transform .15s,border-color .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:0 16px 34px -24px rgba(28,26,23,.7)}.card-main{appearance:none;width:100%;height:100%;min-height:220px;border:0;background:transparent;text-align:left;padding:20px;cursor:pointer}.card-main:focus-visible,.star-button:focus-visible,.tab-button:focus-visible,.back:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-right:34px}.ticker-line{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}.tk{font-weight:850;font-size:22px;letter-spacing:-.03em}.company{font-size:10px;color:var(--ink-faint)}.badge{display:inline-flex;align-items:center;font-weight:800;font-size:11px;padding:5px 9px;border-radius:6px}.badge.bull{background:var(--bull-bg);color:var(--bull)}.badge.bear{background:var(--bear-bg);color:var(--bear)}.badge.neutral{background:var(--neutral-bg);color:var(--neutral)}.star-button{position:absolute;right:12px;top:12px;border:0;background:transparent;color:var(--line-strong);font-size:20px;line-height:1;cursor:pointer;padding:6px;z-index:2}.star-button.saved{color:var(--warning)}
+.csumm{font-size:13px;line-height:1.65;color:var(--ink-soft);margin:17px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:18px}.latest{font-size:10px;color:var(--ink-faint)}.mini-metrics{display:flex;gap:8px;font-size:10px;color:var(--ink-faint)}.flip{color:var(--warning);font-weight:800}.empty{grid-column:1/-1;border:1px dashed var(--line-strong);border-radius:10px;padding:45px;text-align:center;color:var(--ink-soft)}
+#detailPage{display:none;position:fixed;inset:0;z-index:200;background:var(--paper);overflow-y:auto}#detailPage.open{display:block}.detail-bar{position:sticky;top:0;background:rgba(243,240,233,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:10px 24px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px}.back{border:1px solid var(--line-strong);background:var(--card);border-radius:7px;padding:8px 12px;cursor:pointer}.detail-actions{display:flex;gap:8px}.detail-save{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:8px 11px;cursor:pointer}.detail-save.saved{border-color:#d59a30;color:var(--warning);background:#fff7e5}
+.detail-shell{max-width:980px;margin:0 auto;padding:38px 30px 70px}.detail-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.detail-title{font-size:clamp(34px,6vw,62px);letter-spacing:-.06em;line-height:.95;margin:0}.detail-company{color:var(--ink-faint);font-size:12px;margin:10px 0 0}.detail-aliases{font-size:10px;color:var(--ink-faint);margin-top:5px}.detail-badge{font-size:13px;padding:8px 12px}
+.detail-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:26px 0}.detail-metric{border-top:1px solid var(--line-strong);padding-top:9px}.detail-metric-value{font-size:19px;font-weight:850}.detail-metric-label{font-size:10px;color:var(--ink-faint);margin-top:2px}
+.tabs{display:flex;gap:5px;overflow-x:auto;border-bottom:1px solid var(--line);margin:25px 0 22px}.tab-button{white-space:nowrap;border:0;border-bottom:3px solid transparent;background:transparent;padding:10px 12px;cursor:pointer;color:var(--ink-soft);font-size:12px}.tab-button.active{border-bottom-color:var(--accent);color:var(--accent);font-weight:850}.detail-content{min-height:300px}.section-title{font-size:12px;color:var(--ink-faint);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}.latest-panel{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:22px}.latest-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.latest-thesis{font-size:20px;line-height:1.55;letter-spacing:-.02em;margin:18px 0}.evidence{padding:12px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--ink-soft);font-size:12px;line-height:1.6}.evidence-label{font-weight:850;color:var(--accent);display:block;margin-bottom:3px}.source{display:inline-block;margin-top:14px;font-size:11px;font-weight:750}.distribution{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:18px}.distribution-item{border:1px solid var(--line);border-radius:8px;padding:10px}.distribution-number{font-weight:850}.distribution-label{font-size:10px;color:var(--ink-faint)}
+.timeline{position:relative;display:grid;gap:10px}.timeline:before{content:"";position:absolute;left:12px;top:12px;bottom:12px;width:1px;background:var(--line-strong)}.timeline-item{position:relative;margin-left:31px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:15px}.timeline-item:before{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);left:-24px;top:17px;box-shadow:0 0 0 4px var(--paper)}.timeline-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.timeline-type{font-size:11px;font-weight:850;color:var(--accent)}.timeline-date{font-size:10px;color:var(--ink-faint)}.timeline-summary{font-size:12px;color:var(--ink-soft);margin-top:3px}.timeline-thesis{font-size:13px;line-height:1.6;margin-top:11px}
+.key-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.key-card{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:17px}.key-why{font-size:10px;color:var(--accent);font-weight:850;letter-spacing:.06em}.key-date{font-size:10px;color:var(--ink-faint);margin-top:4px}.key-thesis{font-size:13px;line-height:1.65;margin-top:14px}
+.risk-list,.history-list{display:grid;gap:10px}.risk-card,.post{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px}.risk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.risk-name{font-size:15px;font-weight:750;line-height:1.5}.risk-count{font-size:10px;color:var(--bear);background:var(--bear-bg);padding:4px 7px;border-radius:5px;white-space:nowrap}.risk-dates{font-size:10px;color:var(--ink-faint);margin-top:7px}.risk-sources{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.risk-source{font-size:10px}.post-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--ink-faint);margin-bottom:10px}.post-text{font-size:13px;line-height:1.65;white-space:pre-wrap}.label{font-weight:800}.post-evidence{margin-top:11px;padding:9px 11px;border-left:3px solid var(--line-strong);background:var(--paper);color:var(--ink-soft)}.risk-text{margin-top:11px}.source-ticker{color:var(--warning);font-weight:700}.no-data{border:1px dashed var(--line-strong);border-radius:10px;padding:35px;text-align:center;color:var(--ink-soft);font-size:13px}
+.toast{position:fixed;right:20px;bottom:20px;z-index:400;max-width:340px;background:var(--ink);color:white;border-radius:8px;padding:11px 14px;font-size:12px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translateY(0)}
+@media(max-width:900px){:root{--sidebar:230px}.main{padding:32px 26px}.stats{grid-template-columns:1fr 1fr}.key-grid{grid-template-columns:1fr}.detail-metrics{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.sidebar{position:static;width:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line-strong);padding:18px}.subtitle{margin-bottom:15px}.side-section{margin-top:12px;padding-top:12px}.recent-section,.data-section{display:none}.main{margin-left:0;padding:24px 16px 60px}.main-header{align-items:flex-start;flex-direction:column}.header-meta{text-align:left}.wall{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.detail-shell{padding:26px 16px 55px}.detail-heading{align-items:flex-start}.detail-metrics{grid-template-columns:1fr 1fr}.distribution{grid-template-columns:1fr}.empty{padding:32px 18px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
 <body>
-<nav class="sidenav"><div style="padding: 0 22px;"><b>Serenity Tracker</b><br><br><span style="font-size:12px;color:var(--ink-faint)">Automated Opinion Aggregation</span></div></nav>
-<div class="main">
-    <div class="st">Daily Watchlist</div>
-    <div class="wall">
-        {{ DAILY_CARDS }}
-    </div>
-</div>
+<aside class="sidebar" aria-label="儀表板控制">
+  <div class="brand"><span class="brand-name">Serenity Tracker</span><span class="brand-mark" aria-hidden="true"></span></div>
+  <span class="subtitle">Public-post opinion research, with source evidence.</span>
 
-<!-- 彈出視窗結構 -->
-<div id="ddPage">
-    <div class="ddbar"><button onclick="document.getElementById('ddPage').style.display='none'">← Back</button></div>
-    <div id="ddBody"></div>
-</div>
+  <form class="query-form" id="queryForm" role="search">
+    <input class="query-input" id="queryInput" type="search" autocomplete="off" placeholder="輸入 SIVE 或問一句話" aria-label="搜尋股票或輸入問題">
+    <button class="query-submit" type="submit" aria-label="執行查詢">查</button>
+  </form>
+  <p class="query-help">例如：AXTI 有哪些風險？／本週偏多股票</p>
 
+  <section class="side-section">
+    <span class="side-label">期間</span>
+    <nav class="period-nav" id="periodNav" aria-label="時間範圍"></nav>
+  </section>
+
+  <section class="side-section">
+    <span class="side-label">最新立場</span>
+    <div class="filter-grid" id="sentimentFilters"></div>
+    <div class="toggle-row"><input id="riskOnly" type="checkbox"><label for="riskOnly">只看有明確風險</label></div>
+    <div class="toggle-row"><input id="favoritesOnly" type="checkbox"><label for="favoritesOnly">只看收藏</label></div>
+  </section>
+
+  <section class="side-section">
+    <label class="side-label" for="sortSelect">排序</label>
+    <select class="sort-select" id="sortSelect">
+      <option value="latest">最近提及</option>
+      <option value="mentions">期間提及次數</option>
+      <option value="risk">風險數量</option>
+      <option value="ticker">Ticker A–Z</option>
+    </select>
+  </section>
+
+  <section class="side-section recent-section">
+    <span class="side-label">最近查看</span>
+    <div class="recent-list" id="recentList"></div>
+  </section>
+
+  <section class="side-section data-section">
+    <span class="side-label">資料狀態</span>
+    <p class="data-note" id="dataNote"></p>
+  </section>
+</aside>
+
+<main class="main" id="dashboard">
+  <header class="main-header">
+    <div><div class="eyebrow" id="periodEyebrow"></div><h1 class="page-title" id="pageTitle">Watchlist</h1></div>
+    <div class="header-meta" id="headerMeta"></div>
+  </header>
+  <div class="query-status" id="queryStatus" aria-live="polite"></div>
+  <section class="stats" id="stats" aria-label="期間摘要"></section>
+  <div class="result-bar"><span class="result-count" id="resultCount"></span><button class="clear-button" id="clearFilters" type="button" hidden>清除篩選</button></div>
+  <section class="wall" id="cardWall" aria-label="股票清單"></section>
+</main>
+
+<section id="detailPage" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+  <div class="detail-bar">
+    <button class="back" id="backButton" type="button">← 返回儀表板</button>
+    <div class="detail-actions"><button class="detail-save" id="detailSave" type="button"></button></div>
+  </div>
+  <div class="detail-shell" id="detailShell"></div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script id="trackerData" type="application/json">{{ DYNAMIC_JSON_DATA }}</script>
 <script>
-var DD_DATA = {{ DYNAMIC_JSON_DATA }};
+"use strict";
+const trackerData = JSON.parse(document.getElementById("trackerData").textContent);
+const elements = {
+  periodNav: document.getElementById("periodNav"),
+  sentimentFilters: document.getElementById("sentimentFilters"),
+  riskOnly: document.getElementById("riskOnly"),
+  favoritesOnly: document.getElementById("favoritesOnly"),
+  sortSelect: document.getElementById("sortSelect"),
+  recentList: document.getElementById("recentList"),
+  dataNote: document.getElementById("dataNote"),
+  queryForm: document.getElementById("queryForm"),
+  queryInput: document.getElementById("queryInput"),
+  queryStatus: document.getElementById("queryStatus"),
+  periodEyebrow: document.getElementById("periodEyebrow"),
+  pageTitle: document.getElementById("pageTitle"),
+  headerMeta: document.getElementById("headerMeta"),
+  stats: document.getElementById("stats"),
+  resultCount: document.getElementById("resultCount"),
+  clearFilters: document.getElementById("clearFilters"),
+  cardWall: document.getElementById("cardWall"),
+  detailPage: document.getElementById("detailPage"),
+  detailShell: document.getElementById("detailShell"),
+  backButton: document.getElementById("backButton"),
+  detailSave: document.getElementById("detailSave"),
+  toast: document.getElementById("toast")
+};
+const defaults = {period:"day",sentiment:"All",risk:false,favorites:false,sort:"latest",query:"",ticker:null,tab:"summary"};
+const validPeriods = new Set(Object.keys(trackerData.periods));
+const validSentiments = new Set(["All","Bullish","Bearish","Neutral"]);
+const validSorts = new Set(["latest","mentions","risk","ticker"]);
+const validTabs = new Set(["summary","evolution","key","risks","history"]);
+const tickerIndex = new Map();
+trackerData.tickers.forEach((ticker) => {
+  tickerIndex.set(ticker.ticker.toUpperCase(), ticker);
+  ticker.aliases.forEach((alias) => tickerIndex.set(alias.toUpperCase(), ticker));
+});
+let state = readState();
+let favorites = readStoredList("serenity:favorites:v1");
+let recent = readStoredList("serenity:recent:v1");
+let lastFocused = null;
+let toastTimer = null;
 
-// 處理點擊卡片彈出視窗的邏輯
-function dd(ticker) {
-    var data = DD_DATA[ticker];
-    if (!data) return;
-    
-    var html = '<h1 style="border-bottom:2px solid var(--ink); padding-bottom:10px;">' + ticker + ' - History</h1>';
-    
-    data.posts.forEach(function(p) {
-        var color = p.tag === 'Bullish' ? 'green' : (p.tag === 'Bearish' ? 'red' : 'gray');
-        html += '<div class="post">';
-        html += '<div style="font-size:11px; color:gray; margin-bottom:5px;">' + p.d + ' <b style="color:' + color + '">[' + p.tag + ']</b></div>';
-        html += '<div style="font-size:14px; line-height:1.6; white-space:pre-wrap;">' + p.text + '</div>';
-        html += '<div style="margin-top:10px; font-size:11px;"><a href="' + p.url + '" target="_blank">View Original Post ↗</a></div>';
-        html += '</div>';
-    });
-    
-    document.getElementById('ddBody').innerHTML = html;
-    document.getElementById('ddPage').style.display = 'block';
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
 }
+
+function button(className, text, onClick) {
+  const node = element("button", className, text);
+  node.type = "button";
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+function stanceClass(sentiment) {
+  return sentiment === "Bullish" ? "bull" : sentiment === "Bearish" ? "bear" : "neutral";
+}
+
+function localDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("zh-TW", {hour12:false});
+}
+
+function readStoredList(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function storeList(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (_error) { /* device storage unavailable */ }
+}
+
+function readState() {
+  const params = new URLSearchParams(location.search);
+  const period = params.get("period") || defaults.period;
+  const sentiment = params.get("sentiment") || defaults.sentiment;
+  const sort = params.get("sort") || defaults.sort;
+  const tab = params.get("tab") || defaults.tab;
+  const rawTicker = (params.get("ticker") || "").toUpperCase();
+  const indexedTicker = tickerIndex.get(rawTicker);
+  return {
+    period: validPeriods.has(period) ? period : defaults.period,
+    sentiment: validSentiments.has(sentiment) ? sentiment : defaults.sentiment,
+    risk: params.get("risk") === "1",
+    favorites: params.get("favorites") === "1",
+    sort: validSorts.has(sort) ? sort : defaults.sort,
+    query: params.get("q") || "",
+    ticker: indexedTicker ? indexedTicker.ticker : null,
+    tab: validTabs.has(tab) ? tab : defaults.tab
+  };
+}
+
+function writeState({push=false, detail=false}={}) {
+  const params = new URLSearchParams();
+  if (state.period !== defaults.period) params.set("period", state.period);
+  if (state.sentiment !== defaults.sentiment) params.set("sentiment", state.sentiment);
+  if (state.risk) params.set("risk", "1");
+  if (state.favorites) params.set("favorites", "1");
+  if (state.sort !== defaults.sort) params.set("sort", state.sort);
+  if (state.query) params.set("q", state.query);
+  if (state.ticker) params.set("ticker", state.ticker);
+  if (state.ticker && state.tab !== defaults.tab) params.set("tab", state.tab);
+  const url = new URL(location.href);
+  url.search = params.toString();
+  url.hash = "";
+  const historyState = detail ? {serenityDetail:true} : {};
+  history[push ? "pushState" : "replaceState"](historyState, "", url);
+}
+
+function showToast(message) {
+  elements.toast.textContent = message;
+  elements.toast.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 1800);
+}
+
+function currentPeriod() { return trackerData.periods[state.period]; }
+
+function postsInPeriod(ticker) {
+  const period = currentPeriod();
+  return ticker.posts.filter((post) => post.date >= period.start && post.date <= period.end);
+}
+
+function periodSnapshot(ticker) {
+  const posts = postsInPeriod(ticker);
+  if (!posts.length) return null;
+  const sentiments = new Set(posts.map((post) => post.sentiment));
+  return {
+    ticker,
+    posts,
+    latest: posts[0],
+    mentionCount: posts.length,
+    riskCount: posts.filter((post) => Boolean(post.risks)).length,
+    stanceChanged: sentiments.size > 1
+  };
+}
+
+function searchHaystack(snapshot) {
+  const ticker = snapshot.ticker;
+  return [ticker.ticker,ticker.company_name,ticker.exchange,...ticker.aliases,...ticker.source_tickers,...snapshot.posts.flatMap((post) => [post.thesis,post.risks || "",post.sentiment_evidence || ""])].join(" ").toLocaleLowerCase();
+}
+
+function filteredSnapshots() {
+  const query = state.query.trim().toLocaleLowerCase();
+  const snapshots = trackerData.tickers.map(periodSnapshot).filter(Boolean).filter((snapshot) => {
+    if (state.sentiment !== "All" && snapshot.latest.sentiment !== state.sentiment) return false;
+    if (state.risk && snapshot.riskCount === 0) return false;
+    if (state.favorites && !favorites.includes(snapshot.ticker.ticker)) return false;
+    if (query && !searchHaystack(snapshot).includes(query)) return false;
+    return true;
+  });
+  snapshots.sort((left, right) => {
+    if (state.sort === "mentions") return right.mentionCount - left.mentionCount || right.latest.timestamp.localeCompare(left.latest.timestamp);
+    if (state.sort === "risk") return right.riskCount - left.riskCount || right.latest.timestamp.localeCompare(left.latest.timestamp);
+    if (state.sort === "ticker") return left.ticker.ticker.localeCompare(right.ticker.ticker);
+    return right.latest.timestamp.localeCompare(left.latest.timestamp) || left.ticker.ticker.localeCompare(right.ticker.ticker);
+  });
+  return snapshots;
+}
+
+function renderControls() {
+  elements.periodNav.replaceChildren();
+  Object.entries(trackerData.periods).forEach(([key, period]) => {
+    const node = button(`period-button${state.period === key ? " active" : ""}`, `${period.label} ${period.ticker_count}`, () => {
+      state.period = key;
+      state.query = "";
+      elements.queryStatus.textContent = "";
+      writeState();
+      renderDashboard();
+    });
+    node.setAttribute("aria-pressed", String(state.period === key));
+    elements.periodNav.append(node);
+  });
+
+  elements.sentimentFilters.replaceChildren();
+  [["All","全部"],["Bullish","偏多"],["Bearish","偏空"],["Neutral","中立"]].forEach(([value,label]) => {
+    const extra = value === "Bullish" ? " bull" : value === "Bearish" ? " bear" : "";
+    const node = button(`filter-button${extra}${state.sentiment === value ? " active" : ""}`, label, () => {
+      state.sentiment = value;
+      writeState();
+      renderDashboard();
+    });
+    node.setAttribute("aria-pressed", String(state.sentiment === value));
+    elements.sentimentFilters.append(node);
+  });
+  elements.riskOnly.checked = state.risk;
+  elements.favoritesOnly.checked = state.favorites;
+  elements.sortSelect.value = state.sort;
+  elements.queryInput.value = state.query;
+}
+
+function renderRecent() {
+  elements.recentList.replaceChildren();
+  const available = recent.map((ticker) => trackerData.tickers.find((item) => item.ticker === ticker)).filter(Boolean).slice(0, 7);
+  if (!available.length) {
+    elements.recentList.append(element("span", "empty-recent", "尚未查看個股"));
+    return;
+  }
+  available.forEach((ticker) => {
+    const node = button("recent-button", null, () => openDetail(ticker.ticker, "summary", node));
+    node.append(element("span", "recent-ticker", ticker.ticker));
+    node.append(element("span", "recent-date", ticker.latest_date));
+    elements.recentList.append(node);
+  });
+}
+
+function stat(label, value, detail) {
+  const node = element("div", "stat");
+  node.append(element("div", "stat-label", label));
+  node.append(element("div", "stat-value", String(value)));
+  node.append(element("div", "stat-detail", detail));
+  return node;
+}
+
+function renderStats(snapshots) {
+  const mentionCount = snapshots.reduce((sum, snapshot) => sum + snapshot.mentionCount, 0);
+  const bullish = snapshots.filter((snapshot) => snapshot.latest.sentiment === "Bullish").length;
+  const bearish = snapshots.filter((snapshot) => snapshot.latest.sentiment === "Bearish").length;
+  const riskCount = snapshots.filter((snapshot) => snapshot.riskCount > 0).length;
+  elements.stats.replaceChildren(
+    stat("符合股票", snapshots.length, `期間共 ${currentPeriod().ticker_count} 組`),
+    stat("提及次數", mentionCount, `${currentPeriod().post_count} 篇來源貼文`),
+    stat("最新偏多／偏空", `${bullish}／${bearish}`, "依期間內最後一次立場"),
+    stat("有明確風險", riskCount, "只計作者明確指出的風險")
+  );
+}
+
+function toggleFavorite(ticker) {
+  if (favorites.includes(ticker)) {
+    favorites = favorites.filter((item) => item !== ticker);
+    showToast(`已取消收藏 ${ticker}`);
+  } else {
+    favorites = [ticker, ...favorites.filter((item) => item !== ticker)];
+    showToast(`已收藏 ${ticker}`);
+  }
+  storeList("serenity:favorites:v1", favorites);
+  if (state.favorites) renderDashboard();
+  else {
+    renderCards(filteredSnapshots());
+    if (state.ticker) renderDetail();
+  }
+}
+
+function renderCard(snapshot) {
+  const ticker = snapshot.ticker;
+  const card = element("article", "card");
+  const star = button(`star-button${favorites.includes(ticker.ticker) ? " saved" : ""}`, favorites.includes(ticker.ticker) ? "★" : "☆", (event) => {
+    event.stopPropagation();
+    toggleFavorite(ticker.ticker);
+  });
+  star.setAttribute("aria-label", `${favorites.includes(ticker.ticker) ? "取消收藏" : "收藏"} ${ticker.ticker}`);
+  card.append(star);
+
+  const main = button("card-main", null, () => openDetail(ticker.ticker, "summary", main));
+  main.setAttribute("aria-label", `查看 ${ticker.ticker} 個股研究`);
+  const head = element("div", "card-head");
+  const tickerLine = element("div", "ticker-line");
+  tickerLine.append(element("span", "tk", ticker.ticker));
+  if (ticker.company_name) tickerLine.append(element("span", "company", ticker.company_name));
+  head.append(tickerLine);
+  head.append(element("span", `badge ${stanceClass(snapshot.latest.sentiment)}`, snapshot.latest.sentiment));
+  main.append(head);
+  main.append(element("div", "csumm", snapshot.latest.thesis));
+  const foot = element("div", "card-foot");
+  foot.append(element("div", "latest", `Latest ${snapshot.latest.date}`));
+  const metrics = element("div", "mini-metrics");
+  metrics.append(element("span", "", `${snapshot.mentionCount} mentions`));
+  if (snapshot.riskCount) metrics.append(element("span", "", `${snapshot.riskCount} risks`));
+  if (snapshot.stanceChanged) metrics.append(element("span", "flip", "立場變化"));
+  foot.append(metrics);
+  main.append(foot);
+  card.append(main);
+  return card;
+}
+
+function renderCards(snapshots) {
+  elements.cardWall.replaceChildren();
+  if (!snapshots.length) {
+    elements.cardWall.append(element("div", "empty", "目前篩選條件沒有符合的股票。試著切換期間或清除篩選。"));
+    return;
+  }
+  snapshots.forEach((snapshot) => elements.cardWall.append(renderCard(snapshot)));
+}
+
+function hasFilters() {
+  return state.sentiment !== "All" || state.risk || state.favorites || state.query || state.sort !== "latest";
+}
+
+function renderDashboard() {
+  renderControls();
+  renderRecent();
+  const period = currentPeriod();
+  const snapshots = filteredSnapshots();
+  elements.periodEyebrow.textContent = `${period.start} — ${period.end}`;
+  elements.pageTitle.textContent = period.title;
+  elements.headerMeta.textContent = `資料截止 ${trackerData.dataset_end}\nGenerated ${localDate(trackerData.generated_at)}`;
+  elements.headerMeta.style.whiteSpace = "pre-line";
+  elements.dataNote.textContent = `涵蓋 ${trackerData.dataset_start} 至 ${trackerData.dataset_end}；alias 合併後共 ${trackerData.tickers.length} 組股票。`;
+  renderStats(snapshots);
+  elements.resultCount.textContent = `顯示 ${snapshots.length} 組股票`;
+  elements.clearFilters.hidden = !hasFilters();
+  renderCards(snapshots);
+}
+
+function addRecent(ticker) {
+  recent = [ticker, ...recent.filter((item) => item !== ticker)].slice(0, 10);
+  storeList("serenity:recent:v1", recent);
+}
+
+function openDetail(ticker, tab="summary", trigger=null) {
+  const target = tickerIndex.get(ticker.toUpperCase());
+  if (!target) return;
+  lastFocused = trigger || document.activeElement;
+  state.ticker = target.ticker;
+  state.tab = validTabs.has(tab) ? tab : "summary";
+  addRecent(target.ticker);
+  writeState({push:true, detail:true});
+  renderDetail();
+}
+
+function closeDetail() {
+  if (!state.ticker) return;
+  if (history.state && history.state.serenityDetail) {
+    history.back();
+  } else {
+    state.ticker = null;
+    state.tab = "summary";
+    writeState();
+    hideDetail();
+  }
+}
+
+function hideDetail() {
+  elements.detailPage.classList.remove("open");
+  elements.detailShell.replaceChildren();
+  document.body.style.overflow = "";
+  renderRecent();
+  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+}
+
+function detailMetric(value, label) {
+  const node = element("div", "detail-metric");
+  node.append(element("div", "detail-metric-value", String(value)));
+  node.append(element("div", "detail-metric-label", label));
+  return node;
+}
+
+function sourceLink(post, label="查看原文 ↗") {
+  if (!post.url) return null;
+  const link = element("a", "source", label);
+  link.href = post.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  return link;
+}
+
+function renderSummary(ticker) {
+  const latest = ticker.posts[0];
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("h2", "section-title", "最新摘要"));
+  const panel = element("section", "latest-panel");
+  const head = element("div", "latest-panel-head");
+  head.append(element("span", `badge ${stanceClass(latest.sentiment)}`, latest.sentiment));
+  head.append(element("span", "latest", latest.date));
+  panel.append(head);
+  panel.append(element("div", "latest-thesis", latest.thesis));
+  if (latest.sentiment_evidence) {
+    const evidence = element("div", "evidence");
+    evidence.append(element("span", "evidence-label", "立場判定依據"));
+    evidence.append(document.createTextNode(latest.sentiment_evidence));
+    panel.append(evidence);
+  }
+  const link = sourceLink(latest);
+  if (link) panel.append(link);
+  const distribution = element("div", "distribution");
+  [["Bullish","偏多"],["Bearish","偏空"],["Neutral","中立"]].forEach(([key,label]) => {
+    const item = element("div", "distribution-item");
+    item.append(element("div", "distribution-number", ticker.sentiment_counts[key]));
+    item.append(element("div", "distribution-label", `${label}歷史紀錄`));
+    distribution.append(item);
+  });
+  panel.append(distribution);
+  fragment.append(panel);
+  return fragment;
+}
+
+function renderEvolution(ticker) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("h2", "section-title", "論點演變"));
+  const timeline = element("div", "timeline");
+  ticker.evolution.forEach((event) => {
+    const item = element("article", "timeline-item");
+    const top = element("div", "timeline-top");
+    top.append(element("span", "timeline-type", event.change_type));
+    top.append(element("span", "timeline-date", `${event.date} · ${event.sentiment}`));
+    item.append(top);
+    item.append(element("div", "timeline-summary", event.change_summary));
+    item.append(element("div", "timeline-thesis", event.thesis));
+    const link = sourceLink(event);
+    if (link) item.append(link);
+    timeline.append(item);
+  });
+  fragment.append(timeline);
+  return fragment;
+}
+
+function renderKeyPoints(ticker) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("h2", "section-title", "3 個關鍵觀點"));
+  const grid = element("div", "key-grid");
+  ticker.key_points.forEach((point) => {
+    const card = element("article", "key-card");
+    card.append(element("div", "key-why", point.why));
+    card.append(element("div", "key-date", `${point.date} · ${point.sentiment}`));
+    card.append(element("div", "key-thesis", point.thesis));
+    const link = sourceLink(point);
+    if (link) card.append(link);
+    grid.append(card);
+  });
+  fragment.append(grid);
+  return fragment;
+}
+
+function renderRisks(ticker) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("h2", "section-title", "作者曾明確提到的風險"));
+  if (!ticker.risk_groups.length) {
+    fragment.append(element("div", "no-data", "目前沒有找到作者對這檔股票明確指出的風險。這不代表股票沒有風險。"));
+    return fragment;
+  }
+  const list = element("div", "risk-list");
+  ticker.risk_groups.forEach((risk) => {
+    const card = element("article", "risk-card");
+    const head = element("div", "risk-head");
+    head.append(element("div", "risk-name", risk.risk));
+    head.append(element("span", "risk-count", `${risk.count} 次`));
+    card.append(head);
+    card.append(element("div", "risk-dates", `${risk.first_date} — ${risk.last_date}`));
+    const sources = element("div", "risk-sources");
+    risk.occurrences.forEach((occurrence) => {
+      const link = sourceLink(occurrence, `${occurrence.date} ↗`);
+      if (link) { link.className = "risk-source"; sources.append(link); }
+    });
+    card.append(sources);
+    list.append(card);
+  });
+  fragment.append(list);
+  return fragment;
+}
+
+function renderHistory(ticker) {
+  const fragment = document.createDocumentFragment();
+  fragment.append(element("h2", "section-title", "完整來源紀錄"));
+  const list = element("div", "history-list");
+  ticker.posts.forEach((post) => {
+    const article = element("article", "post");
+    const meta = element("div", "post-meta");
+    meta.append(element("span", `badge ${stanceClass(post.sentiment)}`, post.sentiment));
+    const dateText = post.source_ticker !== ticker.ticker ? `${post.date} · 原始代碼 ${post.source_ticker}` : post.date;
+    meta.append(element("span", post.source_ticker !== ticker.ticker ? "source-ticker" : "", dateText));
+    article.append(meta);
+    const thesis = element("div", "post-text");
+    thesis.append(element("span", "label", "【論點】\n"));
+    thesis.append(document.createTextNode(post.thesis));
+    article.append(thesis);
+    if (post.sentiment_evidence) {
+      const evidence = element("div", "post-text post-evidence");
+      evidence.append(element("span", "label", "【立場判定依據】\n"));
+      evidence.append(document.createTextNode(post.sentiment_evidence));
+      article.append(evidence);
+    }
+    const risk = element("div", "post-text risk-text");
+    risk.append(element("span", "label", "【風險】\n"));
+    risk.append(document.createTextNode(post.risks || "未提及"));
+    article.append(risk);
+    const link = sourceLink(post);
+    if (link) article.append(link);
+    list.append(article);
+  });
+  fragment.append(list);
+  return fragment;
+}
+
+function renderDetail() {
+  const ticker = trackerData.tickers.find((item) => item.ticker === state.ticker);
+  if (!ticker) { hideDetail(); return; }
+  elements.detailShell.replaceChildren();
+  const heading = element("header", "detail-heading");
+  const titleBlock = element("div");
+  const title = element("h1", "detail-title", ticker.ticker);
+  title.id = "detailTitle";
+  titleBlock.append(title);
+  if (ticker.company_name) titleBlock.append(element("p", "detail-company", `${ticker.company_name}${ticker.exchange ? ` · ${ticker.exchange}` : ""}`));
+  const aliasText = ticker.aliases.filter((alias) => alias !== ticker.ticker);
+  if (aliasText.length) titleBlock.append(element("div", "detail-aliases", `Aliases: ${aliasText.join(", ")}`));
+  heading.append(titleBlock);
+  heading.append(element("span", `badge detail-badge ${stanceClass(ticker.latest_sentiment)}`, ticker.latest_sentiment));
+  elements.detailShell.append(heading);
+
+  const metrics = element("section", "detail-metrics", null);
+  metrics.append(detailMetric(ticker.mention_count, "歷史提及"));
+  metrics.append(detailMetric(ticker.first_date, "首次提及"));
+  metrics.append(detailMetric(ticker.latest_date, "最近提及"));
+  metrics.append(detailMetric(ticker.risk_groups.length, "風險主題"));
+  elements.detailShell.append(metrics);
+
+  const tabs = element("nav", "tabs");
+  tabs.setAttribute("role", "tablist");
+  [["summary","最新摘要"],["evolution","論點演變"],["key","關鍵觀點"],["risks","風險"],["history","完整紀錄"]].forEach(([value,label]) => {
+    const tab = button(`tab-button${state.tab === value ? " active" : ""}`, label, () => {
+      state.tab = value;
+      writeState();
+      renderDetail();
+    });
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(state.tab === value));
+    tabs.append(tab);
+  });
+  elements.detailShell.append(tabs);
+  const content = element("div", "detail-content");
+  if (state.tab === "evolution") content.append(renderEvolution(ticker));
+  else if (state.tab === "key") content.append(renderKeyPoints(ticker));
+  else if (state.tab === "risks") content.append(renderRisks(ticker));
+  else if (state.tab === "history") content.append(renderHistory(ticker));
+  else content.append(renderSummary(ticker));
+  elements.detailShell.append(content);
+
+  const saved = favorites.includes(ticker.ticker);
+  elements.detailSave.textContent = saved ? "★ 已收藏" : "☆ 收藏";
+  elements.detailSave.classList.toggle("saved", saved);
+  elements.detailSave.onclick = () => toggleFavorite(ticker.ticker);
+  elements.detailPage.classList.add("open");
+  document.body.style.overflow = "hidden";
+  elements.backButton.focus();
+  renderRecent();
+}
+
+function findTickerInQuestion(question) {
+  const upper = question.toUpperCase();
+  const aliases = [...tickerIndex.keys()].sort((left, right) => right.length - left.length);
+  return aliases.find((alias) => {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^A-Z0-9.])${escaped}(?=$|[^A-Z0-9.])`).test(upper);
+  }) || null;
+}
+
+function interpretQuestion(rawQuestion) {
+  const question = rawQuestion.trim();
+  if (!question) return;
+  const lower = question.toLocaleLowerCase();
+  let detectedPeriod = null;
+  if (/今天|今日|日報|daily/.test(lower)) detectedPeriod = "day";
+  else if (/本週|這週|一週|週報|weekly|week/.test(lower)) detectedPeriod = "week";
+  else if (/本月|這月|月報|monthly|month/.test(lower)) detectedPeriod = "month";
+  else if (/本季|這季|季報|quarterly|quarter/.test(lower)) detectedPeriod = "quarter";
+  if (detectedPeriod) state.period = detectedPeriod;
+
+  const tickerAlias = findTickerInQuestion(question);
+  const ticker = tickerAlias ? tickerIndex.get(tickerAlias) : null;
+  const asksRisk = /風險|疑慮|risk|downside/.test(lower);
+  if (ticker) {
+    state.query = "";
+    elements.queryInput.value = "";
+    elements.queryStatus.textContent = `已開啟 ${ticker.ticker}${asksRisk ? " 的風險整理" : " 個股研究"}`;
+    openDetail(ticker.ticker, asksRisk ? "risks" : "summary", elements.queryInput);
+    return;
+  }
+
+  let sentiment = null;
+  if (/偏多|看多|多頭|bullish/.test(lower)) sentiment = "Bullish";
+  else if (/偏空|看空|空頭|bearish/.test(lower)) sentiment = "Bearish";
+  else if (/中立|neutral/.test(lower)) sentiment = "Neutral";
+  if (sentiment) {
+    state.sentiment = sentiment;
+    state.query = "";
+    state.risk = asksRisk;
+    elements.queryStatus.textContent = `已顯示${currentPeriod().label}期最新立場為${sentiment === "Bullish" ? "偏多" : sentiment === "Bearish" ? "偏空" : "中立"}的股票`;
+  } else if (/收藏|自選|favorite|watchlist/.test(lower)) {
+    state.favorites = true;
+    state.query = "";
+    elements.queryStatus.textContent = "已顯示收藏股票";
+  } else {
+    state.query = question;
+    elements.queryStatus.textContent = `正在搜尋「${question}」`;
+  }
+  writeState();
+  renderDashboard();
+}
+
+elements.queryForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  interpretQuestion(elements.queryInput.value);
+});
+elements.riskOnly.addEventListener("change", () => { state.risk = elements.riskOnly.checked; writeState(); renderDashboard(); });
+elements.favoritesOnly.addEventListener("change", () => { state.favorites = elements.favoritesOnly.checked; writeState(); renderDashboard(); });
+elements.sortSelect.addEventListener("change", () => { state.sort = elements.sortSelect.value; writeState(); renderDashboard(); });
+elements.clearFilters.addEventListener("click", () => {
+  state.sentiment = "All"; state.risk = false; state.favorites = false; state.sort = "latest"; state.query = "";
+  elements.queryStatus.textContent = "";
+  writeState(); renderDashboard();
+});
+elements.backButton.addEventListener("click", closeDetail);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.ticker) closeDetail();
+  if (event.key === "/" && !state.ticker && document.activeElement !== elements.queryInput) {
+    event.preventDefault(); elements.queryInput.focus();
+  }
+});
+window.addEventListener("popstate", () => {
+  state = readState();
+  if (state.ticker) renderDetail(); else { hideDetail(); renderDashboard(); }
+});
+
+renderDashboard();
+if (state.ticker) renderDetail();
 </script>
 </body>
 </html>

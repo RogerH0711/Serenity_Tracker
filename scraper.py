@@ -1,85 +1,182 @@
+"""Collect recent posts from an X profile with stable status identities."""
+
+from __future__ import annotations
+
 import asyncio
-import json
 import os
+from pathlib import Path
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
-from playwright.async_api import async_playwright
-# 載入環境變數
-load_dotenv()
+from playwright.async_api import ElementHandle, Page, async_playwright
 
-# 設定配置
-TARGET_ACCOUNT = "aleabitoreddit"
-AUTH_TOKEN = os.getenv("X_AUTH_TOKEN")
+from common import (
+    PROJECT_DIR,
+    atomic_write_json,
+    canonical_x_url,
+    extract_post_id,
+    is_safe_x_url,
+)
 
-if not AUTH_TOKEN:
-    raise ValueError("錯誤：找不到 X_AUTH_TOKEN，請檢查 .env 檔案設定。")
 
-async def scrape_tweets():
-    async with async_playwright() as p:
-        # 啟動 Chromium 瀏覽器（headless=True 代表不開啟瀏覽器視窗，背景執行）
-        browser = await p.chromium.launch(headless=True)
-        
-        # 建立瀏覽器上下文，並注入 auth_token Cookie
-        context = await browser.new_context()
-        await context.add_cookies([{
-            'name': 'auth_token',
-            'value': AUTH_TOKEN,
-            'domain': '.x.com',
-            'path': '/'
-        }])
-        
-        page = await context.new_page()
-        print(f"正在前往 https://x.com/{TARGET_ACCOUNT} ...")
-        
-        # 前往目標使用者的推文頁面
-        await page.goto(f"https://x.com/{TARGET_ACCOUNT}", wait_until="domcontentloaded")
-        
-        # 等待推文元件載入
+RAW_TWEETS_PATH = PROJECT_DIR / "raw_tweets.json"
+DEFAULT_TARGET_ACCOUNT = "aleabitoreddit"
+
+
+def _positive_int(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise ValueError(f"{name} 必須是整數，目前為 {raw_value!r}") from error
+    if value < 1:
+        raise ValueError(f"{name} 必須大於 0")
+    return value
+
+
+async def _extract_post(article: ElementHandle) -> dict[str, str] | None:
+    text_elements = await article.query_selector_all('div[data-testid="tweetText"]')
+    time_element = await article.query_selector("time")
+    if not text_elements or not time_element:
+        return None
+
+    text = (await text_elements[0].inner_text()).strip()
+    context_parts: list[str] = []
+    seen_context: set[str] = set()
+    for context_element in text_elements[1:]:
+        context_text = (await context_element.inner_text()).strip()
+        normalized = " ".join(context_text.split())
+        if not normalized or normalized == " ".join(text.split()):
+            continue
+        if normalized in seen_context:
+            continue
+        seen_context.add(normalized)
+        context_parts.append(context_text)
+    timestamp = (await time_element.get_attribute("datetime") or "").strip()
+    href = await time_element.evaluate(
+        "element => element.closest('a')?.getAttribute('href') || ''"
+    )
+    post_id = extract_post_id(href)
+    if not text or not timestamp or not post_id:
+        return None
+
+    path_parts = [part for part in urlparse(href).path.split("/") if part]
+    author = path_parts[0] if path_parts else DEFAULT_TARGET_ACCOUNT
+    url = canonical_x_url(post_id, author)
+    if not is_safe_x_url(url):
+        return None
+
+    return {
+        "post_id": post_id,
+        "timestamp": timestamp,
+        "text": text,
+        "context": "\n\n".join(context_parts),
+        "url": url,
+    }
+
+
+async def _collect_visible_posts(
+    page: Page,
+    collected: dict[str, dict[str, str]],
+) -> int:
+    articles = await page.query_selector_all('article[data-testid="tweet"]')
+    added = 0
+    for article in articles:
         try:
-            await page.wait_for_selector('article[data-testid="tweet"]', timeout=10000)
-        except Exception as e:
-            print("無法載入推文，請檢查 auth_token 是否過期或正確。")
+            post = await _extract_post(article)
+        except Exception as error:
+            print(f"警告：略過一則無法解析的貼文元件：{error}")
+            continue
+        if post and post["post_id"] not in collected:
+            collected[post["post_id"]] = post
+            added += 1
+    return added
+
+
+async def scrape_tweets(
+    *,
+    auth_token: str,
+    target_account: str,
+    output_path: Path = RAW_TWEETS_PATH,
+    scroll_rounds: int = 3,
+    max_posts: int = 40,
+) -> list[dict[str, str]]:
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True)
+        try:
+            context = await browser.new_context()
+            await context.add_cookies(
+                [
+                    {
+                        "name": "auth_token",
+                        "value": auth_token,
+                        "domain": ".x.com",
+                        "path": "/",
+                        "secure": True,
+                        "httpOnly": True,
+                    }
+                ]
+            )
+            page = await context.new_page()
+            profile_url = f"https://x.com/{target_account}"
+            print(f"正在前往 {profile_url} ...")
+            response = await page.goto(
+                profile_url,
+                wait_until="domcontentloaded",
+                timeout=30_000,
+            )
+            if response and response.status >= 400:
+                raise RuntimeError(f"X 回傳 HTTP {response.status}")
+            if "/login" in page.url or "/i/flow/login" in page.url:
+                raise RuntimeError("X_AUTH_TOKEN 已失效，頁面被導向登入流程")
+
+            await page.wait_for_selector(
+                'article[data-testid="tweet"]', timeout=15_000
+            )
+
+            collected: dict[str, dict[str, str]] = {}
+            stable_rounds = 0
+            for round_index in range(scroll_rounds):
+                added = await _collect_visible_posts(page, collected)
+                stable_rounds = stable_rounds + 1 if added == 0 else 0
+                if len(collected) >= max_posts or stable_rounds >= 2:
+                    break
+                if round_index + 1 < scroll_rounds:
+                    await page.mouse.wheel(0, 2600)
+                    await page.wait_for_timeout(1_200)
+
+            tweets = sorted(
+                collected.values(), key=lambda post: post["timestamp"], reverse=True
+            )[:max_posts]
+            if not tweets:
+                raise RuntimeError("沒有取得任何有效貼文；保留既有 raw_tweets.json")
+
+            atomic_write_json(output_path, tweets)
+            print(f"抓取完成：原子寫入 {len(tweets)} 則貼文至 {output_path.name}")
+            return tweets
+        finally:
             await browser.close()
-            return
 
-        tweets_data = []
-        
-        # 抓取頁面上的推文元件
-        tweets = await page.query_selector_all('article[data-testid="tweet"]')
-        print(f"成功偵測到 {len(tweets)} 則推文，開始解析...")
 
-        for tweet in tweets:
-            try:
-                # 1. 抓取推文文字
-                text_element = await tweet.query_selector('div[data-testid="tweetText"]')
-                text = await text_element.inner_text() if text_element else ""
-                
-                # 2. 抓取推文時間與連結
-                time_element = await tweet.query_selector('time')
-                if time_element:
-                    timestamp = await time_element.get_attribute('datetime')
-                    # 尋找包含時間的 <a> 標籤以獲取推文網址
-                    a_element = await time_element.evaluate_handle('el => el.closest("a")')
-                    tweet_url = f"https://x.com{await a_element.get_attribute('href')}" if a_element else ""
-                else:
-                    timestamp = ""
-                    tweet_url = ""
+def main() -> None:
+    load_dotenv(PROJECT_DIR / ".env")
+    auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
+    if not auth_token:
+        raise SystemExit("錯誤：找不到 X_AUTH_TOKEN，請檢查 .env 設定。")
 
-                # 濾除沒有內容的推文（例如純轉發無引言）
-                if text:
-                    tweets_data.append({
-                        "timestamp": timestamp,
-                        "text": text,
-                        "url": tweet_url
-                    })
-            except Exception as e:
-                continue
+    target_account = os.getenv("X_TARGET_ACCOUNT", DEFAULT_TARGET_ACCOUNT).strip()
+    try:
+        asyncio.run(
+            scrape_tweets(
+                auth_token=auth_token,
+                target_account=target_account,
+                scroll_rounds=_positive_int("SCRAPE_SCROLL_ROUNDS", 3),
+                max_posts=_positive_int("SCRAPE_MAX_POSTS", 40),
+            )
+        )
+    except Exception as error:
+        raise SystemExit(f"爬蟲失敗：{error}") from error
 
-        # 儲存為 JSON 檔案
-        with open("raw_tweets.json", "w", encoding="utf-8") as f:
-            json.dump(tweets_data, f, ensure_ascii=False, indent=4)
-        
-        print(f"抓取完成！已成功儲存 {len(tweets_data)} 則推文至 raw_tweets.json")
-        await browser.close()
 
 if __name__ == "__main__":
-    asyncio.run(scrape_tweets())
+    main()
