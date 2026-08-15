@@ -1,8 +1,22 @@
 # Serenity Tracker
 
 Serenity Tracker 會定期抓取指定 X 帳號近期貼文，從明示的 cashtag（例如 `$NVDA`）提取半導體與 AI 供應鏈觀點，並生成不需要後端伺服器的靜態儀表板。
-<img width="2880" height="1624" alt="image" src="https://github.com/user-attachments/assets/c2b044ab-bb1a-42af-89bb-48c15b96f90c" />
 
+![Serenity Tracker 月度股票儀表板](docs/images/dashboard.png)
+
+## 功能畫面
+
+### 個股研究摘要與人工覆核
+
+![MU 個股研究摘要與人工覆核](docs/images/ticker-research.png)
+
+### 股價、提及標記與績效
+
+![NVDA 股價、提及標記與績效](docs/images/market-performance.png)
+
+### 有原文來源的本機 AI 問答
+
+![MU 與 SHKY 投資論點比較](docs/images/ai-question.png)
 
 ## 設計重點
 
@@ -23,6 +37,8 @@ Serenity Tracker 會定期抓取指定 X 帳號近期貼文，從明示的 casht
 - 儀表板以資料集最新日期為截止日，提供日、7 天、28 天、90 天四種滾動視圖；`Daily` 不會再混入舊股票。
 - 搜尋、情緒、風險與排序狀態會寫入網址；收藏與最近查看只保存在目前裝置的瀏覽器中。
 - `ticker_aliases.json` 是可人工審核、可進版控的股票代碼合併規則，避免同一家公司因市場後綴或 OTC 代碼被拆成多張卡。
+- 調整後日線、提及後 1／7／30／90 日績效與多空標記只快取在本機 SQLite，不會把行情資料發布到 GitHub Pages。
+- 本機 AI 問答只讀取已收錄的研究內容，模型引用未知 `post_id` 時會拒絕回答；相同問題與相同資料會使用快取，避免重複消耗額度。
 
 ## 資料流
 
@@ -34,6 +50,7 @@ X profile
                                                 │
                                                 ├─ summarize.py ──> ticker_snapshots
                                                 ├─ alias_review.py scan ──> alias candidates
+                                                ├─ prices.py ──> adjusted prices (local SQLite)
                                                 └─ build_site.py ──> index.html (atomic)
 ```
 
@@ -48,6 +65,9 @@ posts(post_id PK, timestamp, text, context, url, parse_status, analysis_version,
 pipeline_runs(run metrics, status, failed_stage, timestamps, ...)
 ticker_snapshots(ticker PK, source_fingerprint, semantic summary, source ids, ...)
 ticker_alias_candidates(canonical_ticker, alias, confidence, review status, ...)
+ticker_price_profiles(ticker PK, provider symbol, currency, refresh status, ...)
+market_prices(ticker, price_date, adjusted_close, fetched_at)
+qa_cache(question hash PK, context fingerprint, cited answer, hit count, ...)
 ```
 
 `parse_status` 會記錄 `pending`、`completed` 或 `failed`。暫時失敗的項目會在下一次排程重試；遇到 429/503 時會停止本次剩餘 API 呼叫，避免連續撞擊服務。歷史 `legacy-v1` 分析不會只因程式版本改變而自動重跑，避免舊資料突然消失或大量消耗配額。
@@ -79,6 +99,7 @@ SCRAPE_SCROLL_ROUNDS=3
 SCRAPE_MAX_POSTS=40
 PARSER_MAX_POSTS=20
 SUMMARY_MAX_TICKERS=2
+PRICE_MAX_TICKERS=5
 ```
 
 請把 `.env` 視為密碼檔案，不要提交或貼到日誌。透過 Session Cookie 自動存取 X 也可能受平台規則或登入驗證變化影響，部署前請自行確認適用條款。
@@ -96,7 +117,8 @@ SUMMARY_MAX_TICKERS=2
 3. 只解析資料庫中尚未完成的貼文。
 4. 只更新內容有變化的個股語意摘要。
 5. 掃描新的 ticker alias 候選。
-6. 從資料庫重新生成 `index.html`。
+6. 增量更新最多五組本機調整後日線行情。
+7. 從資料庫重新生成 `index.html`。
 
 ### 儀表板查詢
 
@@ -119,6 +141,47 @@ index.html?ticker=AXTI&tab=risks
 
 收藏與最近查看屬於裝置本機偏好，使用瀏覽器 `localStorage`，不會進入 SQLite 或上傳。
 
+### 本機行情與提及後績效
+
+執行完整管線後，個股頁會多出「股價／績效」分頁。為避免把第三方行情重新發布到公開站點，價格只存在 gitignore 的 `serenity.db`，需從本機研究站查看：
+
+```bash
+./review_site.sh
+```
+
+分頁提供調整後日線、Bullish／Bearish／Neutral 提及標記，以及從首次提及基準計算的 1、7、30、90 日與至今報酬。可在頁面按「更新行情」，或用 CLI 指定股票：
+
+```bash
+venv/bin/python prices.py --ticker SIVE
+```
+
+不同市場的 symbol、幣別與 alias 一起放在 `ticker_aliases.json`：
+
+```json
+{
+  "SIVE": {
+    "aliases": ["SIVEF"],
+    "exchange": "STO",
+    "price_symbol": "SIVE.ST",
+    "currency": "SEK"
+  }
+}
+```
+
+若某 ticker 不應抓行情，可把 `price_symbol` 設為 `null`。行情由 `yfinance` 取得；該專案明確標示 Yahoo 資料供個人使用，請勿將本機快取當成可再散布的正式行情源。
+
+### 有來源的本機 AI 問答
+
+規則式查詢仍不呼叫 Gemini。啟動 `./review_site.sh` 且 `.env` 已設定 `GEMINI_API_KEY` 後，搜尋框也能處理需要綜合推理的問題，例如：
+
+```text
+為什麼作者目前看多 SIVE？
+比較 MU 與 SNDK 的論點差異
+哪些風險在不同股票重複出現？
+```
+
+問答後端只會提供目前 SQLite 中的論點、風險、立場與來源 ID，不允許模型補外部資訊；每個來源都會顯示成可開啟的 X 原文連結。模型若引用不存在的 ticker／`post_id`，回答不會顯示也不會寫入快取。快取會在相關研究內容改變時自動失效，本機服務另限制每分鐘最多 6 次問答。公開 GitHub Pages 維持無金鑰、無後端的唯讀規則式查詢。
+
 ### Ticker alias 管理
 
 在 `ticker_aliases.json` 以 canonical ticker 為鍵，列出需要合併的別名：
@@ -128,7 +191,9 @@ index.html?ticker=AXTI&tab=risks
   "SIVE": {
     "aliases": ["SIVEF"],
     "company_name": "Sivers Semiconductors",
-    "exchange": ""
+    "exchange": "STO",
+    "price_symbol": "SIVE.ST",
+    "currency": "SEK"
   }
 }
 ```
@@ -155,7 +220,17 @@ venv/bin/python build_site.py
 - `舊資料未驗證`：`legacy-v1` 歷史資料沒有逐字立場依據，多空只能作為線索。
 - `待覆核`：非 legacy 資料但目前沒有立場證據。
 
-先查看模型結果與原文：
+日常使用建議直接啟動本機研究網站（人工覆核、行情與 AI 問答共用同一入口）：
+
+```bash
+./review_site.sh
+```
+
+瀏覽器開啟 `http://127.0.0.1:8765`，進入個股的「最新摘要」或「完整紀錄」，點選該筆旁邊的「人工覆核」。表單會自動帶入貼文代碼、ticker、立場、論點與風險，不需要手動尋找或輸入 `post_id`。儲存或移除覆核後會直接更新 SQLite 並重新生成 `index.html`。
+
+覆核寫入 API 只監聽本機 `127.0.0.1`，並要求同源及本次啟動的隨機 token。部署在 GitHub Pages 的公開網站會維持唯讀，不會顯示覆核按鈕。使用完畢可在終端按 `Ctrl+C` 關閉。
+
+以下 CLI 保留作為批次處理及除錯備援。先查看模型結果與原文：
 
 ```bash
 venv/bin/python review.py show 2088226398708338889 --ticker SHKY
@@ -177,7 +252,7 @@ venv/bin/python build_site.py
 
 ### Pipeline 健康狀態
 
-`pipeline_runs` 會保存每次執行的抓取數、長文補抓結果、解析成功／失敗、語意摘要更新／失敗、alias 候選數、失敗階段與錯誤分類。X 登入失效及 API 429 限流會分開標示，網站側欄會顯示：
+`pipeline_runs` 會保存每次執行的抓取數、長文補抓結果、解析成功／失敗、語意摘要更新／失敗、行情更新／失敗、alias 候選數、失敗階段與錯誤分類。X 登入失效及 API 429 限流會分開標示，網站側欄會顯示：
 
 - `資料正常`：最近一次管線完整成功。
 - `部分失敗`：長文補抓、解析或語意摘要有部分失敗。
@@ -251,13 +326,13 @@ venv/bin/python alias_review.py reject 4 --note "不同公司"
 
 ## 測試
 
-測試不會連線 X 或 Gemini：
+測試不會連線 X、Yahoo 或 Gemini：
 
 ```bash
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-涵蓋舊資料遷移、重複寫入、人工覆核持久性、管線健康紀錄、增量語意摘要、alias 審核、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。
+涵蓋舊資料遷移、重複寫入、人工覆核持久性、管線健康紀錄、增量語意摘要、alias 審核、調整後行情快取與提及後績效、AI 引用驗證與問答快取、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。測試使用假行情與假模型，不會連線 X、Yahoo 或 Gemini。
 
 ## GitHub Pages 與雲端排程
 
