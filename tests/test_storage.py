@@ -197,6 +197,17 @@ class StorageMigrationTest(unittest.TestCase):
             self.assertIn("sentiment_evidence", mention_columns)
             self.assertIn("failure_kind", pipeline_columns)
             self.assertIn("failure_code", pipeline_columns)
+            self.assertIn("prices_updated", pipeline_columns)
+            self.assertIn("prices_failed", pipeline_columns)
+            table_names = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            self.assertIn("market_prices", table_names)
+            self.assertIn("ticker_price_profiles", table_names)
+            self.assertIn("qa_cache", table_names)
         finally:
             connection.close()
 

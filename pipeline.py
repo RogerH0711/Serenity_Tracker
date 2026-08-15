@@ -28,6 +28,7 @@ PIPELINE_SCRIPTS = (
     "parser.py",
     "summarize.py",
     "alias_review.py",
+    "prices.py",
     "build_site.py",
 )
 STAGE_NAMES = {
@@ -36,6 +37,7 @@ STAGE_NAMES = {
     "parser.py": "parser",
     "summarize.py": "summaries",
     "alias_review.py": "aliases",
+    "prices.py": "prices",
     "build_site.py": "site",
 }
 SCRIPT_ARGUMENTS = {"alias_review.py": ("scan",)}

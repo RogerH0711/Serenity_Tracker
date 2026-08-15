@@ -69,6 +69,11 @@ class StaticSiteSafetyTest(unittest.TestCase):
             self.assertNotIn("<img src=x onerror=alert(2)>", html)
             self.assertIn("\\u003c/script\\u003e", html)
             self.assertNotIn("innerHTML", html)
+            self.assertIn('id="reviewDialog"', html)
+            self.assertIn("api/review/status", html)
+            self.assertIn("api/market", html)
+            self.assertIn("api/ask", html)
+            self.assertNotIn("adjusted_close", html)
 
     def test_periods_aliases_and_research_summaries_are_precomputed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -178,6 +183,7 @@ class StaticSiteSafetyTest(unittest.TestCase):
             sive = next(ticker for ticker in data["tickers"] if ticker["ticker"] == "SIVE")
             self.assertEqual(sive["mention_count"], 2)
             self.assertEqual(sive["source_tickers"], ["SIVE", "SIVEF"])
+            self.assertEqual(sive["price_symbol"], "SIVE")
             self.assertEqual(sive["latest_sentiment"], "Neutral")
             self.assertEqual(sive["latest_thesis"], "人工覆核後維持觀望")
             self.assertEqual(sive["latest_quality_status"], "manual")

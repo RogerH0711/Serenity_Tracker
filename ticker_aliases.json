@@ -2,26 +2,148 @@
   "005930.KS": {
     "aliases": ["005930", "SSNLF"],
     "company_name": "Samsung Electronics",
-    "exchange": "KRX"
+    "exchange": "KRX",
+    "price_symbol": "005930.KS",
+    "currency": "KRW"
   },
   "009150.KS": {
     "aliases": ["009150"],
     "company_name": "Samsung Electro-Mechanics",
-    "exchange": "KRX"
+    "exchange": "KRX",
+    "price_symbol": "009150.KS",
+    "currency": "KRW"
   },
   "300308.SZ": {
     "aliases": ["300308"],
     "company_name": "Zhongji Innolight",
-    "exchange": "SZSE"
+    "exchange": "SZSE",
+    "price_symbol": "300308.SZ",
+    "currency": "CNY"
   },
   "SHKY": {
     "aliases": ["SKHY", "SK HYNIX"],
     "company_name": "SK hynix",
-    "exchange": ""
+    "exchange": "KRX",
+    "price_symbol": "000660.KS",
+    "currency": "KRW"
   },
   "SIVE": {
     "aliases": ["SIVEF"],
     "company_name": "Sivers Semiconductors",
-    "exchange": ""
+    "exchange": "STO",
+    "price_symbol": "SIVE.ST",
+    "currency": "SEK"
+  },
+  "6976": {
+    "aliases": [],
+    "company_name": "Taiyo Yuden",
+    "exchange": "TSE",
+    "price_symbol": "6976.T",
+    "currency": "JPY"
+  },
+  "4062": {
+    "aliases": [],
+    "company_name": "Ibiden",
+    "exchange": "TSE",
+    "price_symbol": "4062.T",
+    "currency": "JPY"
+  },
+  "6787": {
+    "aliases": [],
+    "company_name": "Meiko Electronics",
+    "exchange": "TSE",
+    "price_symbol": "6787.T",
+    "currency": "JPY"
+  },
+  "2802": {
+    "aliases": [],
+    "company_name": "Ajinomoto",
+    "exchange": "TSE",
+    "price_symbol": "2802.T",
+    "currency": "JPY"
+  },
+  "4958": {
+    "aliases": [],
+    "company_name": "Zhen Ding Technology",
+    "exchange": "TWSE",
+    "price_symbol": "4958.TW",
+    "currency": "TWD"
+  },
+  "2313": {
+    "aliases": [],
+    "company_name": "Compeq Manufacturing",
+    "exchange": "TWSE",
+    "price_symbol": "2313.TW",
+    "currency": "TWD"
+  },
+  "2344": {
+    "aliases": [],
+    "company_name": "Winbond Electronics",
+    "exchange": "TWSE",
+    "price_symbol": "2344.TW",
+    "currency": "TWD"
+  },
+  "2337": {
+    "aliases": [],
+    "company_name": "Macronix International",
+    "exchange": "TWSE",
+    "price_symbol": "2337.TW",
+    "currency": "TWD"
+  },
+  "300476": {
+    "aliases": [],
+    "company_name": "Victory Giant Technology",
+    "exchange": "SZSE",
+    "price_symbol": "300476.SZ",
+    "currency": "CNY"
+  },
+  "002281": {
+    "aliases": [],
+    "company_name": "Accelink Technologies",
+    "exchange": "SZSE",
+    "price_symbol": "002281.SZ",
+    "currency": "CNY"
+  },
+  "373220": {
+    "aliases": [],
+    "company_name": "LG Energy Solution",
+    "exchange": "KRX",
+    "price_symbol": "373220.KS",
+    "currency": "KRW"
+  },
+  "307950": {
+    "aliases": [],
+    "company_name": "Hyundai AutoEver",
+    "exchange": "KRX",
+    "price_symbol": "307950.KS",
+    "currency": "KRW"
+  },
+  "010690": {
+    "aliases": [],
+    "company_name": "Hwashin",
+    "exchange": "KRX",
+    "price_symbol": "010690.KS",
+    "currency": "KRW"
+  },
+  "IQE": {
+    "aliases": [],
+    "company_name": "IQE plc",
+    "exchange": "LSE",
+    "price_symbol": "IQE.L",
+    "currency": "GBP"
+  },
+  "XFAB": {
+    "aliases": [],
+    "company_name": "X-FAB Silicon Foundries",
+    "exchange": "Euronext Paris",
+    "price_symbol": "XFAB.PA",
+    "currency": "EUR"
+  },
+  "4005.T": {
+    "aliases": ["4005"],
+    "company_name": "Resonac Holdings",
+    "exchange": "TSE",
+    "price_symbol": "4005.T",
+    "currency": "JPY"
   }
 }

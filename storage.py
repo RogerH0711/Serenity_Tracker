@@ -105,6 +105,10 @@ def _create_schema(connection: sqlite3.Connection) -> None:
                 CHECK (summaries_updated >= 0),
             summaries_failed INTEGER NOT NULL DEFAULT 0
                 CHECK (summaries_failed >= 0),
+            prices_updated INTEGER NOT NULL DEFAULT 0
+                CHECK (prices_updated >= 0),
+            prices_failed INTEGER NOT NULL DEFAULT 0
+                CHECK (prices_failed >= 0),
             alias_candidates_found INTEGER NOT NULL DEFAULT 0
                 CHECK (alias_candidates_found >= 0),
             latest_source_timestamp TEXT,
@@ -153,6 +157,43 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS ticker_price_profiles (
+            ticker TEXT PRIMARY KEY,
+            provider TEXT NOT NULL DEFAULT 'yfinance',
+            provider_symbol TEXT NOT NULL,
+            currency TEXT,
+            first_mention_date TEXT NOT NULL,
+            status TEXT NOT NULL
+                CHECK (status IN ('completed', 'failed', 'unsupported')),
+            last_attempt_at TEXT NOT NULL,
+            last_success_at TEXT,
+            last_error TEXT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS market_prices (
+            ticker TEXT NOT NULL,
+            price_date TEXT NOT NULL,
+            adjusted_close REAL NOT NULL CHECK (adjusted_close > 0),
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY (ticker, price_date),
+            FOREIGN KEY (ticker) REFERENCES ticker_price_profiles(ticker)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS qa_cache (
+            question_hash TEXT PRIMARY KEY,
+            question TEXT NOT NULL,
+            context_fingerprint TEXT NOT NULL,
+            answer_json TEXT NOT NULL,
+            model TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_accessed_at TEXT NOT NULL,
+            hit_count INTEGER NOT NULL DEFAULT 0 CHECK (hit_count >= 0)
+        )
+        """,
+        """
         CREATE INDEX IF NOT EXISTS idx_posts_status_timestamp
             ON posts(parse_status, timestamp DESC)
         """,
@@ -171,6 +212,14 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_alias_candidates_status_last_seen
             ON ticker_alias_candidates(status, last_seen_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_price_profiles_status_attempt
+            ON ticker_price_profiles(status, last_attempt_at)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_qa_cache_accessed
+            ON qa_cache(last_accessed_at DESC)
         """,
     )
     for statement in statements:
@@ -199,12 +248,20 @@ def _upgrade_current_schema(
     needs_failure_code = (
         bool(pipeline_columns) and "failure_code" not in pipeline_columns
     )
+    needs_prices_updated = (
+        bool(pipeline_columns) and "prices_updated" not in pipeline_columns
+    )
+    needs_prices_failed = (
+        bool(pipeline_columns) and "prices_failed" not in pipeline_columns
+    )
     if not any(
         (
             needs_post_context,
             needs_sentiment_evidence,
             needs_failure_kind,
             needs_failure_code,
+            needs_prices_updated,
+            needs_prices_failed,
         )
     ):
         return None
@@ -227,6 +284,16 @@ def _upgrade_current_schema(
             connection.execute("ALTER TABLE pipeline_runs ADD COLUMN failure_kind TEXT")
         if needs_failure_code:
             connection.execute("ALTER TABLE pipeline_runs ADD COLUMN failure_code INTEGER")
+        if needs_prices_updated:
+            connection.execute(
+                "ALTER TABLE pipeline_runs ADD COLUMN prices_updated "
+                "INTEGER NOT NULL DEFAULT 0 CHECK (prices_updated >= 0)"
+            )
+        if needs_prices_failed:
+            connection.execute(
+                "ALTER TABLE pipeline_runs ADD COLUMN prices_failed "
+                "INTEGER NOT NULL DEFAULT 0 CHECK (prices_failed >= 0)"
+            )
         connection.commit()
     except Exception:
         connection.rollback()
@@ -645,6 +712,24 @@ def record_pipeline_alias_candidates(
     connection.commit()
 
 
+def record_pipeline_prices(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    updated: int,
+    failed: int,
+) -> None:
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET prices_updated = ?, prices_failed = ?
+        WHERE id = ?
+        """,
+        (updated, failed, run_id),
+    )
+    connection.commit()
+
+
 def record_pipeline_issue(
     connection: sqlite3.Connection,
     run_id: int,
@@ -736,6 +821,201 @@ def get_ticker_snapshots(
     return connection.execute(
         "SELECT * FROM ticker_snapshots ORDER BY ticker"
     ).fetchall()
+
+
+def get_price_profiles(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return connection.execute(
+        "SELECT * FROM ticker_price_profiles ORDER BY ticker"
+    ).fetchall()
+
+
+def save_market_prices(
+    connection: sqlite3.Connection,
+    *,
+    ticker: str,
+    provider_symbol: str,
+    currency: str | None,
+    first_mention_date: str,
+    prices: Iterable[Mapping[str, object]],
+) -> int:
+    normalized_ticker = ticker.strip().upper()
+    normalized_symbol = provider_symbol.strip().upper()
+    now = utc_now()
+    rows = []
+    for item in prices:
+        price_date = str(item["date"])
+        adjusted_close = float(item["adjusted_close"])
+        if adjusted_close <= 0:
+            continue
+        rows.append((normalized_ticker, price_date, adjusted_close, now))
+    if not rows:
+        raise ValueError(f"{normalized_ticker} 沒有有效價格資料")
+
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute(
+            """
+            INSERT INTO ticker_price_profiles (
+                ticker, provider, provider_symbol, currency,
+                first_mention_date, status, last_attempt_at,
+                last_success_at, last_error
+            ) VALUES (?, 'yfinance', ?, ?, ?, 'completed', ?, ?, NULL)
+            ON CONFLICT(ticker) DO UPDATE SET
+                provider = 'yfinance',
+                provider_symbol = excluded.provider_symbol,
+                currency = excluded.currency,
+                first_mention_date = excluded.first_mention_date,
+                status = 'completed',
+                last_attempt_at = excluded.last_attempt_at,
+                last_success_at = excluded.last_success_at,
+                last_error = NULL
+            """,
+            (
+                normalized_ticker,
+                normalized_symbol,
+                currency.strip().upper() if currency else None,
+                first_mention_date,
+                now,
+                now,
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO market_prices (
+                ticker, price_date, adjusted_close, fetched_at
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(ticker, price_date) DO UPDATE SET
+                adjusted_close = excluded.adjusted_close,
+                fetched_at = excluded.fetched_at
+            """,
+            rows,
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    return len(rows)
+
+
+def mark_price_refresh_failed(
+    connection: sqlite3.Connection,
+    *,
+    ticker: str,
+    provider_symbol: str,
+    first_mention_date: str,
+    error: str,
+    unsupported: bool = False,
+) -> None:
+    now = utc_now()
+    connection.execute(
+        """
+        INSERT INTO ticker_price_profiles (
+            ticker, provider, provider_symbol, first_mention_date,
+            status, last_attempt_at, last_error
+        ) VALUES (?, 'yfinance', ?, ?, ?, ?, ?)
+        ON CONFLICT(ticker) DO UPDATE SET
+            provider = 'yfinance',
+            provider_symbol = excluded.provider_symbol,
+            first_mention_date = excluded.first_mention_date,
+            status = excluded.status,
+            last_attempt_at = excluded.last_attempt_at,
+            last_error = excluded.last_error
+        """,
+        (
+            ticker.strip().upper(),
+            provider_symbol.strip().upper(),
+            first_mention_date,
+            "unsupported" if unsupported else "failed",
+            now,
+            error[:1000],
+        ),
+    )
+    connection.commit()
+
+
+def get_market_price_data(
+    connection: sqlite3.Connection,
+    ticker: str,
+) -> tuple[sqlite3.Row | None, list[sqlite3.Row]]:
+    normalized = ticker.strip().upper()
+    profile = connection.execute(
+        "SELECT * FROM ticker_price_profiles WHERE ticker = ?",
+        (normalized,),
+    ).fetchone()
+    prices = connection.execute(
+        """
+        SELECT price_date, adjusted_close
+        FROM market_prices
+        WHERE ticker = ?
+        ORDER BY price_date
+        """,
+        (normalized,),
+    ).fetchall()
+    return profile, prices
+
+
+def get_cached_qa(
+    connection: sqlite3.Connection,
+    *,
+    question_hash: str,
+    context_fingerprint: str,
+) -> sqlite3.Row | None:
+    row = connection.execute(
+        """
+        SELECT * FROM qa_cache
+        WHERE question_hash = ? AND context_fingerprint = ?
+        """,
+        (question_hash, context_fingerprint),
+    ).fetchone()
+    if row is not None:
+        connection.execute(
+            """
+            UPDATE qa_cache
+            SET last_accessed_at = ?, hit_count = hit_count + 1
+            WHERE question_hash = ?
+            """,
+            (utc_now(), question_hash),
+        )
+        connection.commit()
+    return row
+
+
+def save_qa_cache(
+    connection: sqlite3.Connection,
+    *,
+    question_hash: str,
+    question: str,
+    context_fingerprint: str,
+    answer_json: str,
+    model: str,
+) -> None:
+    now = utc_now()
+    connection.execute(
+        """
+        INSERT INTO qa_cache (
+            question_hash, question, context_fingerprint, answer_json,
+            model, created_at, last_accessed_at, hit_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+        ON CONFLICT(question_hash) DO UPDATE SET
+            question = excluded.question,
+            context_fingerprint = excluded.context_fingerprint,
+            answer_json = excluded.answer_json,
+            model = excluded.model,
+            created_at = excluded.created_at,
+            last_accessed_at = excluded.last_accessed_at,
+            hit_count = 0
+        """,
+        (
+            question_hash,
+            question,
+            context_fingerprint,
+            answer_json,
+            model,
+            now,
+            now,
+        ),
+    )
+    connection.commit()
 
 
 def save_ticker_snapshot(
@@ -976,7 +1256,11 @@ def database_counts(db_path: Path = DB_PATH) -> dict[str, int]:
                 (SELECT COUNT(*) FROM ticker_snapshots
                     WHERE summary IS NOT NULL) AS snapshots,
                 (SELECT COUNT(*) FROM ticker_alias_candidates
-                    WHERE status = 'pending') AS alias_candidates
+                    WHERE status = 'pending') AS alias_candidates,
+                (SELECT COUNT(*) FROM ticker_price_profiles
+                    WHERE status = 'completed') AS price_tickers,
+                (SELECT COUNT(*) FROM market_prices) AS price_points,
+                (SELECT COUNT(*) FROM qa_cache) AS qa_cache
             """
         ).fetchone()
         return {key: int(row[key]) for key in row.keys()}

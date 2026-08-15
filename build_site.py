@@ -65,6 +65,12 @@ def load_ticker_aliases(
             "company_name": str(raw_profile.get("company_name", "")).strip(),
             "exchange": str(raw_profile.get("exchange", "")).strip(),
             "aliases": aliases,
+            "price_symbol": (
+                None
+                if raw_profile.get("price_symbol", canonical) is None
+                else str(raw_profile.get("price_symbol", canonical)).strip().upper()
+            ),
+            "currency": str(raw_profile.get("currency", "")).strip().upper(),
         }
     return alias_map, profiles
 
@@ -358,7 +364,13 @@ def load_dashboard_data(
                 "ticker": canonical,
                 "profile": alias_profiles.get(
                     canonical,
-                    {"company_name": "", "exchange": "", "aliases": []},
+                    {
+                        "company_name": "",
+                        "exchange": "",
+                        "aliases": [],
+                        "price_symbol": canonical,
+                        "currency": "",
+                    },
                 ),
                 "source_tickers": set(),
                 "posts_by_id": {},
@@ -428,6 +440,8 @@ def load_dashboard_data(
                 "ticker": canonical,
                 "company_name": profile["company_name"],
                 "exchange": profile["exchange"],
+                "price_symbol": profile["price_symbol"],
+                "price_currency": profile["currency"],
                 "aliases": list(dict.fromkeys(configured_aliases)),
                 "source_tickers": sorted(ticker_data["source_tickers"]),
                 "latest_date": latest["date"],

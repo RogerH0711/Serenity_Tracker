@@ -22,7 +22,9 @@ def main() -> None:
         f"{counts['mentions']} 筆個股分析、{counts['pending']} 待解析、"
         f"{counts['failed']} 失敗待重試、{counts['overrides']} 筆人工覆核、"
         f"{counts['snapshots']} 組語意摘要、"
-        f"{counts['alias_candidates']} 筆 alias 待審核。"
+        f"{counts['alias_candidates']} 筆 alias 待審核、"
+        f"{counts['price_tickers']} 組行情／{counts['price_points']} 個交易日、"
+        f"{counts['qa_cache']} 筆 AI 問答快取。"
     )
 
 

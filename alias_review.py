@@ -136,6 +136,10 @@ def approve_candidate(
                 canonical_profile["company_name"] = alias_profile.get("company_name", "")
             if not canonical_profile.get("exchange"):
                 canonical_profile["exchange"] = alias_profile.get("exchange", "")
+            if "price_symbol" not in canonical_profile and "price_symbol" in alias_profile:
+                canonical_profile["price_symbol"] = alias_profile["price_symbol"]
+            if not canonical_profile.get("currency") and alias_profile.get("currency"):
+                canonical_profile["currency"] = alias_profile["currency"]
 
         if company_name.strip():
             canonical_profile["company_name"] = company_name.strip()
