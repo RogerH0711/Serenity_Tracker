@@ -9,6 +9,7 @@ from storage import (
     init_db,
     mark_parse_failed,
     register_posts,
+    set_mention_override,
     store_analysis,
 )
 
@@ -111,14 +112,25 @@ class StaticSiteSafetyTest(unittest.TestCase):
                 store_analysis(
                     connection,
                     "2",
-                    [{"ticker": "SIVE", "sentiment": "Neutral", "thesis": "等待驗證", "risks": None}],
-                    "test-v1",
+                    [{"ticker": "SIVE", "sentiment": "Neutral", "sentiment_evidence": "$SIVE earlier", "thesis": "等待驗證", "risks": None}],
+                    "context-aware-v3",
                 )
                 store_analysis(
                     connection,
                     "1",
                     [{"ticker": "AXTI", "sentiment": "Bearish", "thesis": "舊論點", "risks": None}],
-                    "test-v1",
+                    "legacy-v1",
+                )
+                set_mention_override(
+                    connection,
+                    post_id="3",
+                    ticker="SIVEF",
+                    sentiment="Neutral",
+                    sentiment_evidence="人工查核原文",
+                    thesis="人工覆核後維持觀望",
+                    risks="供應風險",
+                    review_note="原模型過度推論看多",
+                    reviewer="tester",
                 )
             finally:
                 connection.close()
@@ -128,9 +140,19 @@ class StaticSiteSafetyTest(unittest.TestCase):
             sive = next(ticker for ticker in data["tickers"] if ticker["ticker"] == "SIVE")
             self.assertEqual(sive["mention_count"], 2)
             self.assertEqual(sive["source_tickers"], ["SIVE", "SIVEF"])
+            self.assertEqual(sive["latest_sentiment"], "Neutral")
+            self.assertEqual(sive["latest_thesis"], "人工覆核後維持觀望")
+            self.assertEqual(sive["latest_quality_status"], "manual")
+            self.assertEqual(sive["posts"][0]["model_sentiment"], "Bullish")
+            self.assertTrue(sive["posts"][0]["has_override"])
+            self.assertEqual(sive["posts"][0]["review_note"], "原模型過度推論看多")
             self.assertEqual(sive["risk_groups"][0]["risk"], "供應風險")
-            self.assertEqual(sive["evolution"][0]["change_type"], "立場轉折")
+            self.assertEqual(sive["evolution"][0]["change_type"], "新增風險")
             self.assertEqual(len(sive["key_points"]), 2)
+            self.assertEqual(data["quality_totals"]["manual"], 1)
+            self.assertEqual(data["quality_totals"]["verified"], 1)
+            self.assertEqual(data["quality_totals"]["legacy"], 1)
+            self.assertEqual(data["quality_totals"]["unverified"], 0)
             self.assertEqual(data["periods"]["day"]["ticker_count"], 1)
             self.assertEqual(data["periods"]["week"]["ticker_count"], 1)
             self.assertEqual(data["periods"]["quarter"]["ticker_count"], 2)

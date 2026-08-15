@@ -20,7 +20,7 @@ def main() -> None:
     print(
         f"資料庫就緒 ({DB_PATH})：{counts['posts']} 則貼文、"
         f"{counts['mentions']} 筆個股分析、{counts['pending']} 待解析、"
-        f"{counts['failed']} 失敗待重試。"
+        f"{counts['failed']} 失敗待重試、{counts['overrides']} 筆人工覆核。"
     )
 
 

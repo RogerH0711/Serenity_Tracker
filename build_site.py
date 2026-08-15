@@ -216,9 +216,21 @@ def load_dashboard_data(
             """
             SELECT
                 p.post_id, p.timestamp, p.url,
-                m.ticker, m.sentiment, m.sentiment_evidence, m.thesis, m.risks
+                m.ticker, m.analysis_version,
+                m.sentiment AS model_sentiment,
+                m.sentiment_evidence AS model_sentiment_evidence,
+                m.thesis AS model_thesis,
+                m.risks AS model_risks,
+                o.post_id AS override_post_id,
+                o.sentiment AS override_sentiment,
+                o.sentiment_evidence AS override_sentiment_evidence,
+                o.thesis AS override_thesis,
+                o.risks AS override_risks,
+                o.review_note, o.reviewer, o.reviewed_at
             FROM mentions AS m
             JOIN posts AS p ON p.post_id = m.post_id
+            LEFT JOIN mention_overrides AS o
+              ON o.post_id = m.post_id AND o.ticker = m.ticker
             ORDER BY p.timestamp DESC, p.post_id DESC, m.id ASC
             """
         ).fetchall()
@@ -245,15 +257,42 @@ def load_dashboard_data(
             },
         )
         ticker_data["source_tickers"].add(source_ticker)
+        has_override = bool(row["override_post_id"])
+        sentiment = (
+            row["override_sentiment"] if has_override else row["model_sentiment"]
+        )
+        sentiment_evidence = (
+            row["override_sentiment_evidence"]
+            if has_override
+            else row["model_sentiment_evidence"]
+        )
+        thesis = row["override_thesis"] if has_override else row["model_thesis"]
+        risks = row["override_risks"] if has_override else row["model_risks"]
+        analysis_version = str(row["analysis_version"] or "")
+        if has_override or analysis_version.startswith("manual-"):
+            quality_status = "manual"
+        elif sentiment_evidence:
+            quality_status = "verified"
+        elif analysis_version == "legacy-v1":
+            quality_status = "legacy"
+        else:
+            quality_status = "unverified"
         candidate = {
             "post_id": row["post_id"],
             "timestamp": row["timestamp"],
             "date": row["timestamp"][:10],
             "source_ticker": source_ticker,
-            "sentiment": row["sentiment"],
-            "sentiment_evidence": row["sentiment_evidence"] or None,
-            "thesis": row["thesis"],
-            "risks": row["risks"] or None,
+            "sentiment": sentiment,
+            "sentiment_evidence": sentiment_evidence or None,
+            "thesis": thesis,
+            "risks": risks or None,
+            "quality_status": quality_status,
+            "analysis_version": analysis_version,
+            "has_override": has_override,
+            "review_note": row["review_note"] if has_override else None,
+            "reviewer": row["reviewer"] if has_override else None,
+            "reviewed_at": row["reviewed_at"] if has_override else None,
+            "model_sentiment": row["model_sentiment"],
             "url": row["url"] if is_safe_x_url(row["url"]) else None,
         }
         ticker_data["posts_by_id"][row["post_id"]] = _prefer_post(
@@ -271,8 +310,10 @@ def load_dashboard_data(
         )
         latest = posts[0]
         sentiment_counts = {"Bullish": 0, "Bearish": 0, "Neutral": 0}
+        quality_counts = {"manual": 0, "verified": 0, "legacy": 0, "unverified": 0}
         for post in posts:
             sentiment_counts[post["sentiment"]] += 1
+            quality_counts[post["quality_status"]] += 1
         profile = ticker_data["profile"]
         configured_aliases = [canonical, *profile["aliases"]]
         tickers.append(
@@ -285,8 +326,10 @@ def load_dashboard_data(
                 "latest_date": latest["date"],
                 "latest_sentiment": latest["sentiment"],
                 "latest_thesis": latest["thesis"],
+                "latest_quality_status": latest["quality_status"],
                 "mention_count": len(posts),
                 "sentiment_counts": sentiment_counts,
+                "quality_counts": quality_counts,
                 "risk_count": sum(1 for post in posts if post["risks"]),
                 "first_date": posts[-1]["date"],
                 "posts": posts,
@@ -299,6 +342,10 @@ def load_dashboard_data(
     tickers.sort(key=lambda item: (item["latest_date"], item["ticker"]), reverse=True)
     dataset_end = max(all_dates) if all_dates else date.today()
     dataset_start = min(all_dates) if all_dates else dataset_end
+    quality_totals = {"manual": 0, "verified": 0, "legacy": 0, "unverified": 0}
+    for ticker in tickers:
+        for key, value in ticker["quality_counts"].items():
+            quality_totals[key] += value
     period_data: dict[str, dict[str, object]] = {}
     for key, definition in PERIODS.items():
         start = dataset_end - timedelta(days=int(definition["days"]) - 1)
@@ -328,6 +375,7 @@ def load_dashboard_data(
         "generated_at": utc_now(),
         "dataset_start": dataset_start.isoformat(),
         "dataset_end": dataset_end.isoformat(),
+        "quality_totals": quality_totals,
         "periods": period_data,
         "tickers": tickers,
     }

@@ -67,6 +67,22 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS mention_overrides (
+            post_id TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            sentiment TEXT NOT NULL
+                CHECK (sentiment IN ('Bullish', 'Bearish', 'Neutral')),
+            sentiment_evidence TEXT NOT NULL DEFAULT '',
+            thesis TEXT NOT NULL,
+            risks TEXT,
+            review_note TEXT NOT NULL DEFAULT '',
+            reviewer TEXT NOT NULL DEFAULT 'manual',
+            reviewed_at TEXT NOT NULL,
+            PRIMARY KEY (post_id, ticker),
+            FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE
+        )
+        """,
+        """
         CREATE INDEX IF NOT EXISTS idx_posts_status_timestamp
             ON posts(parse_status, timestamp DESC)
         """,
@@ -74,9 +90,14 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_mentions_ticker
             ON mentions(ticker)
         """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_overrides_reviewed_at
+            ON mention_overrides(reviewed_at DESC)
+        """,
     )
     for statement in statements:
         connection.execute(statement)
+    connection.execute("PRAGMA optimize")
 
 
 def _upgrade_current_schema(
@@ -326,6 +347,89 @@ def mark_posts_pending(
     return int(cursor.rowcount)
 
 
+def set_mention_override(
+    connection: sqlite3.Connection,
+    *,
+    post_id: str,
+    ticker: str,
+    sentiment: str,
+    sentiment_evidence: str,
+    thesis: str,
+    risks: str | None,
+    review_note: str,
+    reviewer: str = "manual",
+) -> None:
+    """Persist a human-reviewed effective analysis without changing model output."""
+    normalized_ticker = ticker.strip().upper()
+    normalized_sentiment = sentiment.strip().title()
+    normalized_thesis = thesis.strip()
+    if normalized_sentiment not in VALID_SENTIMENTS:
+        raise ValueError(f"無效 sentiment：{sentiment}")
+    if not normalized_thesis:
+        raise ValueError("人工覆核 thesis 不可為空")
+    identity = connection.execute(
+        "SELECT 1 FROM mentions WHERE post_id = ? AND ticker = ?",
+        (post_id, normalized_ticker),
+    ).fetchone()
+    if identity is None:
+        raise ValueError(f"找不到可覆核的分析：{post_id}/{normalized_ticker}")
+    connection.execute(
+        """
+        INSERT INTO mention_overrides (
+            post_id, ticker, sentiment, sentiment_evidence, thesis, risks,
+            review_note, reviewer, reviewed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(post_id, ticker) DO UPDATE SET
+            sentiment = excluded.sentiment,
+            sentiment_evidence = excluded.sentiment_evidence,
+            thesis = excluded.thesis,
+            risks = excluded.risks,
+            review_note = excluded.review_note,
+            reviewer = excluded.reviewer,
+            reviewed_at = excluded.reviewed_at
+        """,
+        (
+            post_id,
+            normalized_ticker,
+            normalized_sentiment,
+            sentiment_evidence.strip(),
+            normalized_thesis,
+            risks.strip() if risks else None,
+            review_note.strip(),
+            reviewer.strip() or "manual",
+            utc_now(),
+        ),
+    )
+    connection.commit()
+
+
+def delete_mention_override(
+    connection: sqlite3.Connection,
+    post_id: str,
+    ticker: str,
+) -> bool:
+    cursor = connection.execute(
+        "DELETE FROM mention_overrides WHERE post_id = ? AND ticker = ?",
+        (post_id, ticker.strip().upper()),
+    )
+    connection.commit()
+    return bool(cursor.rowcount)
+
+
+def list_mention_overrides(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT
+            o.post_id, o.ticker, o.sentiment, o.sentiment_evidence,
+            o.thesis, o.risks, o.review_note, o.reviewer, o.reviewed_at,
+            p.timestamp, p.url
+        FROM mention_overrides AS o
+        JOIN posts AS p ON p.post_id = o.post_id
+        ORDER BY o.reviewed_at DESC, o.post_id DESC, o.ticker ASC
+        """
+    ).fetchall()
+
+
 def store_analysis(
     connection: sqlite3.Connection,
     post_id: str,
@@ -399,7 +503,8 @@ def database_counts(db_path: Path = DB_PATH) -> dict[str, int]:
                 (SELECT COUNT(*) FROM posts) AS posts,
                 (SELECT COUNT(*) FROM mentions) AS mentions,
                 (SELECT COUNT(*) FROM posts WHERE parse_status = 'pending') AS pending,
-                (SELECT COUNT(*) FROM posts WHERE parse_status = 'failed') AS failed
+                (SELECT COUNT(*) FROM posts WHERE parse_status = 'failed') AS failed,
+                (SELECT COUNT(*) FROM mention_overrides) AS overrides
             """
         ).fetchone()
         return {key: int(row[key]) for key in row.keys()}

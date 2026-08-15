@@ -12,6 +12,8 @@ Serenity Tracker 會定期抓取指定 X 帳號近期貼文，從明示的 casht
 - Gemini 使用相容的結構化輸出與本地 Pydantic 驗證；ticker 只能來自原文明示的 `$CASHTAG`，常見 `$100B`、`$3.4M` 等金額會被排除。
 - 主貼文與引用貼文脈絡分開保存；情緒代表作者對股票的投資立場，不會只因 `bottleneck`、`shortage` 等負面字眼就判為 Bearish。
 - 每個立場必須附上輸入原文中的逐字證據，本地驗證找不到該證據時拒絕寫入；方向不明時使用 Neutral。
+- 每筆分析會顯示可信度：人工覆核、證據已核對、舊資料未驗證或待覆核；有逐字證據不等於解讀一定正確，仍應閱讀原文。
+- 人工修正獨立存放在 `mention_overrides`，建站時優先於模型結果，Gemini 重新解析也不會覆蓋人工決定。
 - 重新解析失敗時保留最後一版成功分析；程式設定造成的 4xx 會立即停止管線，不會誤報成功。
 - 每階段採原子檔案替換；爬蟲失敗時不會讓下游誤用舊 JSON。
 - 靜態頁面使用 DOM `textContent` 渲染外部資料，不使用 `innerHTML`。
@@ -30,12 +32,14 @@ X profile
                                                 └─ build_site.py ──> index.html (atomic)
 ```
 
-SQLite 使用兩張核心資料表：
+SQLite 使用三張核心資料表：
 
 ```text
 posts(post_id PK, timestamp, text, context, url, parse_status, analysis_version, ...)
   └─ mentions(post_id FK, ticker, sentiment, sentiment_evidence, thesis, risks, ...)
        UNIQUE(post_id, ticker)
+  └─ mention_overrides(post_id, ticker, sentiment, evidence, thesis, risks, review_note, ...)
+       PRIMARY KEY(post_id, ticker)
 ```
 
 `parse_status` 會記錄 `pending`、`completed` 或 `failed`。暫時失敗的項目會在下一次排程重試；遇到 429/503 時會停止本次剩餘 API 呼叫，避免連續撞擊服務。歷史 `legacy-v1` 分析不會只因程式版本改變而自動重跑，避免舊資料突然消失或大量消耗配額。
@@ -131,6 +135,35 @@ venv/bin/python build_site.py
 
 重新解析成功前，資料庫會保留上一版分析，不會先刪除既有歷史。
 
+### 可信度與人工覆核
+
+儀表板的可信度標籤定義如下：
+
+- `人工覆核`：有人工 override，或該筆本來就是人工分析版本；建站時優先採用。
+- `證據已核對`：新版模型結果包含可在輸入來源文字中找到的逐字立場依據。
+- `舊資料未驗證`：`legacy-v1` 歷史資料沒有逐字立場依據，多空只能作為線索。
+- `待覆核`：非 legacy 資料但目前沒有立場證據。
+
+先查看模型結果與原文：
+
+```bash
+venv/bin/python review.py show 2088226398708338889 --ticker SHKY
+```
+
+確認後建立人工覆核，再重建網站：
+
+```bash
+venv/bin/python review.py set 2088226398708338889 SHKY \
+  --sentiment Bullish \
+  --evidence 'The $SHKY, Samsung, $SNDK, $MU memory bottleneck never changed anon' \
+  --thesis '作者延續對記憶體瓶頸受惠標的的偏多立場。' \
+  --note '結合貼文引用的既有看多脈絡人工確認' \
+  --reviewer roger
+venv/bin/python build_site.py
+```
+
+`--risks` 可省略。用 `review.py list` 查看所有覆核，用 `review.py delete POST_ID TICKER` 刪除後即可恢復模型結果。覆核備註、覆核者與時間會進入產生的公開 `index.html`，請勿填入敏感資訊。
+
 ### 舊資料庫遷移
 
 第一次執行新版 `db_setup.py` 時，若偵測到舊版扁平 `mentions` 表，系統會：
@@ -152,6 +185,24 @@ venv/bin/python build_site.py
 
 `run_pipeline.sh` 會自行判斷專案位置，不需要把使用者名稱寫死在腳本裡。
 
+### 安全自動發布 GitHub Pages
+
+如果希望管線成功後自動提交網站產物，改用：
+
+```bash
+./publish_site.sh
+```
+
+發布腳本會先確認目前位於 `main`、工作目錄乾淨且沒有未推送 commit，再執行 `git pull --rebase` 與完整管線。它只允許 `index.html` 發生變化，也只會 stage、commit、push 這一個檔案。解析失敗、出現其他檔案異動或 Git 分支分歧時都會停止，不會推送半成品。
+
+每小時更新並發布可使用：
+
+```cron
+0 * * * * /absolute/path/serenity-tracker/publish_site.sh >> /absolute/path/serenity-tracker/pipeline.log 2>&1
+```
+
+執行環境仍須具備 GitHub push 權限。若不需要自動推送，繼續使用 `run_pipeline.sh` 即可。
+
 ## 測試
 
 測試不會連線 X 或 Gemini：
@@ -160,7 +211,7 @@ venv/bin/python build_site.py
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-涵蓋舊資料遷移、重複寫入、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。
+涵蓋舊資料遷移、重複寫入、人工覆核持久性、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。
 
 ## GitHub Pages 與雲端排程
 

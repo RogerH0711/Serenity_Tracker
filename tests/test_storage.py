@@ -6,10 +6,13 @@ from pathlib import Path
 from storage import (
     connect_db,
     database_counts,
+    delete_mention_override,
     init_db,
+    list_mention_overrides,
     mark_posts_pending,
     pending_posts,
     register_posts,
+    set_mention_override,
     store_analysis,
 )
 
@@ -188,6 +191,45 @@ class StorageMigrationTest(unittest.TestCase):
             }
             self.assertIn("context", post_columns)
             self.assertIn("sentiment_evidence", mention_columns)
+        finally:
+            connection.close()
+
+    def test_manual_override_survives_model_reparse(self) -> None:
+        init_db(self.db_path, backup_dir=self.root / "backups")
+        connection = connect_db(self.db_path)
+        try:
+            set_mention_override(
+                connection,
+                post_id="123",
+                ticker="SNDK",
+                sentiment="Bullish",
+                sentiment_evidence="reviewed evidence",
+                thesis="人工確認的看多論點",
+                risks=None,
+                review_note="原模型誤讀 bottleneck",
+                reviewer="roger",
+            )
+            store_analysis(
+                connection,
+                "123",
+                [
+                    {
+                        "ticker": "SNDK",
+                        "sentiment": "Neutral",
+                        "sentiment_evidence": "model evidence",
+                        "thesis": "重新解析結果",
+                        "risks": "模型風險",
+                    }
+                ],
+                "context-aware-v3",
+            )
+            overrides = list_mention_overrides(connection)
+            self.assertEqual(len(overrides), 1)
+            self.assertEqual(overrides[0]["sentiment"], "Bullish")
+            self.assertEqual(overrides[0]["reviewer"], "roger")
+            self.assertEqual(database_counts(self.db_path)["overrides"], 1)
+            self.assertTrue(delete_mention_override(connection, "123", "SNDK"))
+            self.assertFalse(delete_mention_override(connection, "123", "SNDK"))
         finally:
             connection.close()
 

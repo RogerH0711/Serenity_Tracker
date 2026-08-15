@@ -31,13 +31,14 @@ a{color:var(--accent)}
 .result-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:20px 0 12px}.result-count{font-size:12px;color:var(--ink-soft)}.clear-button{border:0;background:transparent;color:var(--accent);font-size:11px;cursor:pointer;padding:5px}.clear-button[hidden]{display:none}
 .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:14px}.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-height:220px;transition:transform .15s,border-color .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:0 16px 34px -24px rgba(28,26,23,.7)}.card-main{appearance:none;width:100%;height:100%;min-height:220px;border:0;background:transparent;text-align:left;padding:20px;cursor:pointer}.card-main:focus-visible,.star-button:focus-visible,.tab-button:focus-visible,.back:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-right:34px}.ticker-line{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}.tk{font-weight:850;font-size:22px;letter-spacing:-.03em}.company{font-size:10px;color:var(--ink-faint)}.badge{display:inline-flex;align-items:center;font-weight:800;font-size:11px;padding:5px 9px;border-radius:6px}.badge.bull{background:var(--bull-bg);color:var(--bull)}.badge.bear{background:var(--bear-bg);color:var(--bear)}.badge.neutral{background:var(--neutral-bg);color:var(--neutral)}.star-button{position:absolute;right:12px;top:12px;border:0;background:transparent;color:var(--line-strong);font-size:20px;line-height:1;cursor:pointer;padding:6px;z-index:2}.star-button.saved{color:var(--warning)}
 .csumm{font-size:13px;line-height:1.65;color:var(--ink-soft);margin:17px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:18px}.latest{font-size:10px;color:var(--ink-faint)}.mini-metrics{display:flex;gap:8px;font-size:10px;color:var(--ink-faint)}.flip{color:var(--warning);font-weight:800}.empty{grid-column:1/-1;border:1px dashed var(--line-strong);border-radius:10px;padding:45px;text-align:center;color:var(--ink-soft)}
+.trust-badge{display:inline-flex;align-items:center;width:max-content;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;line-height:1.2;white-space:nowrap}.trust-badge.manual{border-color:#77a89b;background:#e2f0eb;color:#175f4b}.trust-badge.verified{border-color:#9dbcae;background:#eff6f2;color:#29614d}.trust-badge.legacy{border-color:#d4b178;background:#fff4df;color:#87520d}.trust-badge.unverified{border-color:#ccb2aa;background:#f8eae6;color:#8e392c}.card-trust{margin-top:9px}.trust-notice{margin:14px 0 0;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:11px 12px}.trust-notice-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.trust-notice-text{margin-top:6px;color:var(--ink-soft);font-size:11px;line-height:1.55}.review-note{margin-top:7px;color:var(--accent);font-size:11px;line-height:1.55}.quality-summary{margin-top:7px;color:var(--ink-faint);font-size:10px;line-height:1.55}
 #detailPage{display:none;position:fixed;inset:0;z-index:200;background:var(--paper);overflow-y:auto}#detailPage.open{display:block}.detail-bar{position:sticky;top:0;background:rgba(243,240,233,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:10px 24px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px}.back{border:1px solid var(--line-strong);background:var(--card);border-radius:7px;padding:8px 12px;cursor:pointer}.detail-actions{display:flex;gap:8px}.detail-save{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:8px 11px;cursor:pointer}.detail-save.saved{border-color:#d59a30;color:var(--warning);background:#fff7e5}
 .detail-shell{max-width:980px;margin:0 auto;padding:38px 30px 70px}.detail-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.detail-title{font-size:clamp(34px,6vw,62px);letter-spacing:-.06em;line-height:.95;margin:0}.detail-company{color:var(--ink-faint);font-size:12px;margin:10px 0 0}.detail-aliases{font-size:10px;color:var(--ink-faint);margin-top:5px}.detail-badge{font-size:13px;padding:8px 12px}
 .detail-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:26px 0}.detail-metric{border-top:1px solid var(--line-strong);padding-top:9px}.detail-metric-value{font-size:19px;font-weight:850}.detail-metric-label{font-size:10px;color:var(--ink-faint);margin-top:2px}
 .tabs{display:flex;gap:5px;overflow-x:auto;border-bottom:1px solid var(--line);margin:25px 0 22px}.tab-button{white-space:nowrap;border:0;border-bottom:3px solid transparent;background:transparent;padding:10px 12px;cursor:pointer;color:var(--ink-soft);font-size:12px}.tab-button.active{border-bottom-color:var(--accent);color:var(--accent);font-weight:850}.detail-content{min-height:300px}.section-title{font-size:12px;color:var(--ink-faint);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}.latest-panel{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:22px}.latest-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.latest-thesis{font-size:20px;line-height:1.55;letter-spacing:-.02em;margin:18px 0}.evidence{padding:12px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--ink-soft);font-size:12px;line-height:1.6}.evidence-label{font-weight:850;color:var(--accent);display:block;margin-bottom:3px}.source{display:inline-block;margin-top:14px;font-size:11px;font-weight:750}.distribution{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:18px}.distribution-item{border:1px solid var(--line);border-radius:8px;padding:10px}.distribution-number{font-weight:850}.distribution-label{font-size:10px;color:var(--ink-faint)}
 .timeline{position:relative;display:grid;gap:10px}.timeline:before{content:"";position:absolute;left:12px;top:12px;bottom:12px;width:1px;background:var(--line-strong)}.timeline-item{position:relative;margin-left:31px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:15px}.timeline-item:before{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);left:-24px;top:17px;box-shadow:0 0 0 4px var(--paper)}.timeline-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.timeline-type{font-size:11px;font-weight:850;color:var(--accent)}.timeline-date{font-size:10px;color:var(--ink-faint)}.timeline-summary{font-size:12px;color:var(--ink-soft);margin-top:3px}.timeline-thesis{font-size:13px;line-height:1.6;margin-top:11px}
-.key-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.key-card{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:17px}.key-why{font-size:10px;color:var(--accent);font-weight:850;letter-spacing:.06em}.key-date{font-size:10px;color:var(--ink-faint);margin-top:4px}.key-thesis{font-size:13px;line-height:1.65;margin-top:14px}
-.risk-list,.history-list{display:grid;gap:10px}.risk-card,.post{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px}.risk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.risk-name{font-size:15px;font-weight:750;line-height:1.5}.risk-count{font-size:10px;color:var(--bear);background:var(--bear-bg);padding:4px 7px;border-radius:5px;white-space:nowrap}.risk-dates{font-size:10px;color:var(--ink-faint);margin-top:7px}.risk-sources{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.risk-source{font-size:10px}.post-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--ink-faint);margin-bottom:10px}.post-text{font-size:13px;line-height:1.65;white-space:pre-wrap}.label{font-weight:800}.post-evidence{margin-top:11px;padding:9px 11px;border-left:3px solid var(--line-strong);background:var(--paper);color:var(--ink-soft)}.risk-text{margin-top:11px}.source-ticker{color:var(--warning);font-weight:700}.no-data{border:1px dashed var(--line-strong);border-radius:10px;padding:35px;text-align:center;color:var(--ink-soft);font-size:13px}
+.key-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.key-card{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:17px}.key-why{font-size:10px;color:var(--accent);font-weight:850;letter-spacing:.06em}.key-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px}.key-date{font-size:10px;color:var(--ink-faint)}.key-thesis{font-size:13px;line-height:1.65;margin-top:14px}
+.risk-list,.history-list{display:grid;gap:10px}.risk-card,.post{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:16px}.risk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.risk-name{font-size:15px;font-weight:750;line-height:1.5}.risk-count{font-size:10px;color:var(--bear);background:var(--bear-bg);padding:4px 7px;border-radius:5px;white-space:nowrap}.risk-dates{font-size:10px;color:var(--ink-faint);margin-top:7px}.risk-sources{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.risk-source{font-size:10px}.post-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--ink-faint);margin-bottom:10px}.post-meta-left{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.post-text{font-size:13px;line-height:1.65;white-space:pre-wrap}.label{font-weight:800}.post-evidence{margin-top:11px;padding:9px 11px;border-left:3px solid var(--line-strong);background:var(--paper);color:var(--ink-soft)}.post-review{margin-top:11px;padding:9px 11px;border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--ink-soft);font-size:11px;line-height:1.55}.risk-text{margin-top:11px}.source-ticker{color:var(--warning);font-weight:700}.no-data{border:1px dashed var(--line-strong);border-radius:10px;padding:35px;text-align:center;color:var(--ink-soft);font-size:13px}
 .toast{position:fixed;right:20px;bottom:20px;z-index:400;max-width:340px;background:var(--ink);color:white;border-radius:8px;padding:11px 14px;font-size:12px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translateY(0)}
 @media(max-width:900px){:root{--sidebar:230px}.main{padding:32px 26px}.stats{grid-template-columns:1fr 1fr}.key-grid{grid-template-columns:1fr}.detail-metrics{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.sidebar{position:static;width:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line-strong);padding:18px}.subtitle{margin-bottom:15px}.side-section{margin-top:12px;padding-top:12px}.recent-section,.data-section{display:none}.main{margin-left:0;padding:24px 16px 60px}.main-header{align-items:flex-start;flex-direction:column}.header-meta{text-align:left}.wall{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.detail-shell{padding:26px 16px 55px}.detail-heading{align-items:flex-start}.detail-metrics{grid-template-columns:1fr 1fr}.distribution{grid-template-columns:1fr}.empty{padding:32px 18px}}
@@ -142,6 +143,24 @@ const validPeriods = new Set(Object.keys(trackerData.periods));
 const validSentiments = new Set(["All","Bullish","Bearish","Neutral"]);
 const validSorts = new Set(["latest","mentions","risk","ticker"]);
 const validTabs = new Set(["summary","evolution","key","risks","history"]);
+const qualityMeta = {
+  manual: {
+    label: "人工覆核",
+    description: "此筆結果已由人工確認，顯示內容會優先於模型輸出。"
+  },
+  verified: {
+    label: "證據已核對",
+    description: "新版分析附有來源文字中的逐字依據；仍建議閱讀原文確認完整脈絡。"
+  },
+  legacy: {
+    label: "舊資料未驗證",
+    description: "此筆來自舊版分析，沒有逐字立場證據，請勿只依賴多空標籤。"
+  },
+  unverified: {
+    label: "待覆核",
+    description: "此筆沒有可顯示的逐字立場證據，請先閱讀原文。"
+  }
+};
 const tickerIndex = new Map();
 trackerData.tickers.forEach((ticker) => {
   tickerIndex.set(ticker.ticker.toUpperCase(), ticker);
@@ -169,6 +188,17 @@ function button(className, text, onClick) {
 
 function stanceClass(sentiment) {
   return sentiment === "Bullish" ? "bull" : sentiment === "Bearish" ? "bear" : "neutral";
+}
+
+function qualityInfo(status) {
+  return qualityMeta[status] || qualityMeta.unverified;
+}
+
+function qualityBadge(status, extraClass="") {
+  const info = qualityInfo(status);
+  const node = element("span", `trust-badge ${status in qualityMeta ? status : "unverified"}${extraClass ? ` ${extraClass}` : ""}`, info.label);
+  node.title = info.description;
+  return node;
 }
 
 function localDate(value) {
@@ -379,6 +409,7 @@ function renderCard(snapshot) {
   head.append(tickerLine);
   head.append(element("span", `badge ${stanceClass(snapshot.latest.sentiment)}`, snapshot.latest.sentiment));
   main.append(head);
+  main.append(qualityBadge(snapshot.latest.quality_status, "card-trust"));
   main.append(element("div", "csumm", snapshot.latest.thesis));
   const foot = element("div", "card-foot");
   foot.append(element("div", "latest", `Latest ${snapshot.latest.date}`));
@@ -414,7 +445,9 @@ function renderDashboard() {
   elements.pageTitle.textContent = period.title;
   elements.headerMeta.textContent = `資料截止 ${trackerData.dataset_end}\nGenerated ${localDate(trackerData.generated_at)}`;
   elements.headerMeta.style.whiteSpace = "pre-line";
-  elements.dataNote.textContent = `涵蓋 ${trackerData.dataset_start} 至 ${trackerData.dataset_end}；alias 合併後共 ${trackerData.tickers.length} 組股票。`;
+  const quality = trackerData.quality_totals;
+  elements.dataNote.textContent = `涵蓋 ${trackerData.dataset_start} 至 ${trackerData.dataset_end}；alias 合併後共 ${trackerData.tickers.length} 組股票。\n人工覆核 ${quality.manual}、證據已核對 ${quality.verified}、舊資料未驗證 ${quality.legacy}、待覆核 ${quality.unverified}。`;
+  elements.dataNote.style.whiteSpace = "pre-line";
   renderStats(snapshots);
   elements.resultCount.textContent = `顯示 ${snapshots.length} 組股票`;
   elements.clearFilters.hidden = !hasFilters();
@@ -473,6 +506,22 @@ function sourceLink(post, label="查看原文 ↗") {
   return link;
 }
 
+function trustNotice(post) {
+  const info = qualityInfo(post.quality_status);
+  const notice = element("div", "trust-notice");
+  const head = element("div", "trust-notice-head");
+  head.append(qualityBadge(post.quality_status));
+  if (post.has_override && post.reviewed_at) {
+    head.append(element("span", "latest", `${post.reviewer || "manual"} · ${localDate(post.reviewed_at)}`));
+  }
+  notice.append(head);
+  notice.append(element("div", "trust-notice-text", info.description));
+  if (post.has_override && post.review_note) {
+    notice.append(element("div", "review-note", `覆核備註：${post.review_note}`));
+  }
+  return notice;
+}
+
 function renderSummary(ticker) {
   const latest = ticker.posts[0];
   const fragment = document.createDocumentFragment();
@@ -483,6 +532,7 @@ function renderSummary(ticker) {
   head.append(element("span", "latest", latest.date));
   panel.append(head);
   panel.append(element("div", "latest-thesis", latest.thesis));
+  panel.append(trustNotice(latest));
   if (latest.sentiment_evidence) {
     const evidence = element("div", "evidence");
     evidence.append(element("span", "evidence-label", "立場判定依據"));
@@ -511,7 +561,10 @@ function renderEvolution(ticker) {
     const item = element("article", "timeline-item");
     const top = element("div", "timeline-top");
     top.append(element("span", "timeline-type", event.change_type));
-    top.append(element("span", "timeline-date", `${event.date} · ${event.sentiment}`));
+    const eventMeta = element("div", "post-meta-left");
+    eventMeta.append(qualityBadge(event.quality_status));
+    eventMeta.append(element("span", "timeline-date", `${event.date} · ${event.sentiment}`));
+    top.append(eventMeta);
     item.append(top);
     item.append(element("div", "timeline-summary", event.change_summary));
     item.append(element("div", "timeline-thesis", event.thesis));
@@ -530,7 +583,10 @@ function renderKeyPoints(ticker) {
   ticker.key_points.forEach((point) => {
     const card = element("article", "key-card");
     card.append(element("div", "key-why", point.why));
-    card.append(element("div", "key-date", `${point.date} · ${point.sentiment}`));
+    const pointMeta = element("div", "key-meta");
+    pointMeta.append(qualityBadge(point.quality_status));
+    pointMeta.append(element("div", "key-date", `${point.date} · ${point.sentiment}`));
+    card.append(pointMeta);
     card.append(element("div", "key-thesis", point.thesis));
     const link = sourceLink(point);
     if (link) card.append(link);
@@ -574,7 +630,10 @@ function renderHistory(ticker) {
   ticker.posts.forEach((post) => {
     const article = element("article", "post");
     const meta = element("div", "post-meta");
-    meta.append(element("span", `badge ${stanceClass(post.sentiment)}`, post.sentiment));
+    const metaLeft = element("div", "post-meta-left");
+    metaLeft.append(element("span", `badge ${stanceClass(post.sentiment)}`, post.sentiment));
+    metaLeft.append(qualityBadge(post.quality_status));
+    meta.append(metaLeft);
     const dateText = post.source_ticker !== ticker.ticker ? `${post.date} · 原始代碼 ${post.source_ticker}` : post.date;
     meta.append(element("span", post.source_ticker !== ticker.ticker ? "source-ticker" : "", dateText));
     article.append(meta);
@@ -592,6 +651,9 @@ function renderHistory(ticker) {
     risk.append(element("span", "label", "【風險】\n"));
     risk.append(document.createTextNode(post.risks || "未提及"));
     article.append(risk);
+    if (post.has_override && post.review_note) {
+      article.append(element("div", "post-review", `人工覆核：${post.review_note}`));
+    }
     const link = sourceLink(post);
     if (link) article.append(link);
     list.append(article);
