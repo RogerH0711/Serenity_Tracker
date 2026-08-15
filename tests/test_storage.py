@@ -189,8 +189,14 @@ class StorageMigrationTest(unittest.TestCase):
             mention_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(mentions)")
             }
+            pipeline_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(pipeline_runs)")
+            }
             self.assertIn("context", post_columns)
             self.assertIn("sentiment_evidence", mention_columns)
+            self.assertIn("failure_kind", pipeline_columns)
+            self.assertIn("failure_code", pipeline_columns)
         finally:
             connection.close()
 

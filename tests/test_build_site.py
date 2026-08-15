@@ -3,13 +3,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from build_site import TEMPLATE_PATH, build_static_site, load_dashboard_data
+from build_site import (
+    TEMPLATE_PATH,
+    build_static_site,
+    load_dashboard_data,
+    ticker_fingerprint,
+)
 from storage import (
     connect_db,
+    finish_pipeline_run,
     init_db,
     mark_parse_failed,
     register_posts,
+    save_ticker_snapshot,
     set_mention_override,
+    start_pipeline_run,
     store_analysis,
 )
 
@@ -135,6 +143,36 @@ class StaticSiteSafetyTest(unittest.TestCase):
             finally:
                 connection.close()
 
+            initial_data = load_dashboard_data(db_path, aliases_path)
+            initial_sive = next(
+                ticker for ticker in initial_data["tickers"] if ticker["ticker"] == "SIVE"
+            )
+            connection = connect_db(db_path)
+            try:
+                run_id = start_pipeline_run(connection)
+                finish_pipeline_run(
+                    connection,
+                    run_id,
+                    status="partial",
+                    failed_stage="summaries",
+                    error_message="one summary failed",
+                )
+                save_ticker_snapshot(
+                    connection,
+                    ticker="SIVE",
+                    source_fingerprint=ticker_fingerprint(initial_sive),
+                    latest_sentiment="Neutral",
+                    summary="語意整理後的最新摘要",
+                    evolution_json="[]",
+                    key_points_json='[{"title":"需求","thesis":"等待驗證","why":"代表觀點","source_post_ids":["3"]}]',
+                    risks_json="[]",
+                    source_post_ids_json='["3"]',
+                    covered_post_ids_json='["3","2"]',
+                    analysis_version="semantic-ticker-v1",
+                )
+            finally:
+                connection.close()
+
             data = load_dashboard_data(db_path, aliases_path)
             self.assertEqual(len(data["tickers"]), 2)
             sive = next(ticker for ticker in data["tickers"] if ticker["ticker"] == "SIVE")
@@ -146,6 +184,19 @@ class StaticSiteSafetyTest(unittest.TestCase):
             self.assertEqual(sive["posts"][0]["model_sentiment"], "Bullish")
             self.assertTrue(sive["posts"][0]["has_override"])
             self.assertEqual(sive["posts"][0]["review_note"], "原模型過度推論看多")
+            self.assertEqual(
+                sive["semantic_snapshot"]["summary"],
+                "語意整理後的最新摘要",
+            )
+            self.assertEqual(
+                sive["semantic_snapshot"]["key_points"][0]["sources"][0]["post_id"],
+                "3",
+            )
+            self.assertEqual(
+                sive["semantic_snapshot"]["source_quality_counts"]["manual"],
+                1,
+            )
+            self.assertFalse(sive["semantic_snapshot"]["is_stale"])
             self.assertEqual(sive["risk_groups"][0]["risk"], "供應風險")
             self.assertEqual(sive["evolution"][0]["change_type"], "新增風險")
             self.assertEqual(len(sive["key_points"]), 2)
@@ -153,6 +204,8 @@ class StaticSiteSafetyTest(unittest.TestCase):
             self.assertEqual(data["quality_totals"]["verified"], 1)
             self.assertEqual(data["quality_totals"]["legacy"], 1)
             self.assertEqual(data["quality_totals"]["unverified"], 0)
+            self.assertEqual(data["health"]["status"], "partial")
+            self.assertEqual(data["health"]["semantic_fresh"], 1)
             self.assertEqual(data["periods"]["day"]["ticker_count"], 1)
             self.assertEqual(data["periods"]["week"]["ticker_count"], 1)
             self.assertEqual(data["periods"]["quarter"]["ticker_count"], 2)

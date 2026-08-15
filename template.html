@@ -25,6 +25,7 @@ a{color:var(--accent)}
 .sort-select{width:100%;border:1px solid var(--line);border-radius:7px;background:var(--card);padding:8px;color:var(--ink-soft)}
 .recent-list{display:grid;gap:5px}.recent-button{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:5px 2px;cursor:pointer;text-align:left}.recent-button:hover .recent-ticker{color:var(--accent)}.recent-ticker{font-size:12px;font-weight:800}.recent-date{font-size:10px;color:var(--ink-faint)}.empty-recent{font-size:11px;color:var(--ink-faint)}
 .data-note{font-size:10px;line-height:1.55;color:var(--ink-faint)}
+.health-card{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:10px;margin-bottom:10px}.health-head{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:850}.health-dot{width:8px;height:8px;border-radius:50%;background:var(--neutral)}.health-dot.healthy{background:var(--bull)}.health-dot.running{background:var(--accent)}.health-dot.partial,.health-dot.stale{background:var(--warning)}.health-dot.failed{background:var(--bear)}.health-detail{font-size:9px;color:var(--ink-faint);line-height:1.55;margin-top:6px}.health-error{color:var(--bear);margin-top:5px}
 .main{margin-left:var(--sidebar);padding:38px 42px 70px;min-height:100vh}.main-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;border-bottom:2px solid var(--ink);padding-bottom:16px}.eyebrow{font-size:11px;color:var(--accent);font-weight:850;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}.page-title{font-size:clamp(29px,4vw,46px);letter-spacing:-.055em;line-height:1;margin:0}.header-meta{text-align:right;font-size:11px;color:var(--ink-faint);line-height:1.6}
 .query-status{min-height:22px;margin:13px 0 5px;color:var(--accent);font-size:12px;font-weight:700}.query-status:empty{margin-top:5px}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.stat{border:1px solid var(--line);background:rgba(255,253,248,.7);border-radius:9px;padding:13px 15px}.stat-label{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em}.stat-value{font-size:22px;font-weight:850;margin-top:3px;letter-spacing:-.03em}.stat-detail{font-size:10px;color:var(--ink-faint);margin-top:2px}
@@ -32,6 +33,7 @@ a{color:var(--accent)}
 .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:14px}.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-height:220px;transition:transform .15s,border-color .15s,box-shadow .15s}.card:hover{transform:translateY(-2px);border-color:var(--line-strong);box-shadow:0 16px 34px -24px rgba(28,26,23,.7)}.card-main{appearance:none;width:100%;height:100%;min-height:220px;border:0;background:transparent;text-align:left;padding:20px;cursor:pointer}.card-main:focus-visible,.star-button:focus-visible,.tab-button:focus-visible,.back:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-right:34px}.ticker-line{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}.tk{font-weight:850;font-size:22px;letter-spacing:-.03em}.company{font-size:10px;color:var(--ink-faint)}.badge{display:inline-flex;align-items:center;font-weight:800;font-size:11px;padding:5px 9px;border-radius:6px}.badge.bull{background:var(--bull-bg);color:var(--bull)}.badge.bear{background:var(--bear-bg);color:var(--bear)}.badge.neutral{background:var(--neutral-bg);color:var(--neutral)}.star-button{position:absolute;right:12px;top:12px;border:0;background:transparent;color:var(--line-strong);font-size:20px;line-height:1;cursor:pointer;padding:6px;z-index:2}.star-button.saved{color:var(--warning)}
 .csumm{font-size:13px;line-height:1.65;color:var(--ink-soft);margin:17px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.card-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:18px}.latest{font-size:10px;color:var(--ink-faint)}.mini-metrics{display:flex;gap:8px;font-size:10px;color:var(--ink-faint)}.flip{color:var(--warning);font-weight:800}.empty{grid-column:1/-1;border:1px dashed var(--line-strong);border-radius:10px;padding:45px;text-align:center;color:var(--ink-soft)}
 .trust-badge{display:inline-flex;align-items:center;width:max-content;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;line-height:1.2;white-space:nowrap}.trust-badge.manual{border-color:#77a89b;background:#e2f0eb;color:#175f4b}.trust-badge.verified{border-color:#9dbcae;background:#eff6f2;color:#29614d}.trust-badge.legacy{border-color:#d4b178;background:#fff4df;color:#87520d}.trust-badge.unverified{border-color:#ccb2aa;background:#f8eae6;color:#8e392c}.card-trust{margin-top:9px}.trust-notice{margin:14px 0 0;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:11px 12px}.trust-notice-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.trust-notice-text{margin-top:6px;color:var(--ink-soft);font-size:11px;line-height:1.55}.review-note{margin-top:7px;color:var(--accent);font-size:11px;line-height:1.55}.quality-summary{margin-top:7px;color:var(--ink-faint);font-size:10px;line-height:1.55}
+.semantic-panel{border:1px solid #a9c2b8;border-radius:12px;background:#f2f8f5;padding:20px;margin-bottom:18px}.semantic-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.semantic-label{font-size:10px;font-weight:850;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}.semantic-status{font-size:9px;color:var(--ink-faint)}.semantic-summary{font-size:16px;line-height:1.7;margin-top:12px}.semantic-sources{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.semantic-source{font-size:10px}.semantic-note{font-size:10px;color:var(--ink-faint);margin:-3px 0 13px}.semantic-description{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:8px}
 #detailPage{display:none;position:fixed;inset:0;z-index:200;background:var(--paper);overflow-y:auto}#detailPage.open{display:block}.detail-bar{position:sticky;top:0;background:rgba(243,240,233,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:10px 24px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px}.back{border:1px solid var(--line-strong);background:var(--card);border-radius:7px;padding:8px 12px;cursor:pointer}.detail-actions{display:flex;gap:8px}.detail-save{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:8px 11px;cursor:pointer}.detail-save.saved{border-color:#d59a30;color:var(--warning);background:#fff7e5}
 .detail-shell{max-width:980px;margin:0 auto;padding:38px 30px 70px}.detail-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.detail-title{font-size:clamp(34px,6vw,62px);letter-spacing:-.06em;line-height:.95;margin:0}.detail-company{color:var(--ink-faint);font-size:12px;margin:10px 0 0}.detail-aliases{font-size:10px;color:var(--ink-faint);margin-top:5px}.detail-badge{font-size:13px;padding:8px 12px}
 .detail-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:26px 0}.detail-metric{border-top:1px solid var(--line-strong);padding-top:9px}.detail-metric-value{font-size:19px;font-weight:850}.detail-metric-label{font-size:10px;color:var(--ink-faint);margin-top:2px}
@@ -85,6 +87,7 @@ a{color:var(--accent)}
 
   <section class="side-section data-section">
     <span class="side-label">資料狀態</span>
+    <div class="health-card" id="healthPanel"></div>
     <p class="data-note" id="dataNote"></p>
   </section>
 </aside>
@@ -121,6 +124,7 @@ const elements = {
   favoritesOnly: document.getElementById("favoritesOnly"),
   sortSelect: document.getElementById("sortSelect"),
   recentList: document.getElementById("recentList"),
+  healthPanel: document.getElementById("healthPanel"),
   dataNote: document.getElementById("dataNote"),
   queryForm: document.getElementById("queryForm"),
   queryInput: document.getElementById("queryInput"),
@@ -204,6 +208,44 @@ function qualityBadge(status, extraClass="") {
 function localDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("zh-TW", {hour12:false});
+}
+
+function effectiveHealthStatus() {
+  const health = trackerData.health;
+  const finishedAt = health.latest_run && health.latest_run.finished_at;
+  if (health.status === "healthy" && finishedAt) {
+    const age = Date.now() - new Date(finishedAt).valueOf();
+    if (Number.isFinite(age) && age > 3 * 60 * 60 * 1000) return "stale";
+  }
+  return health.status;
+}
+
+function renderHealth() {
+  const health = trackerData.health;
+  const status = effectiveHealthStatus();
+  const labels = {healthy:"資料正常",running:"管線執行中",partial:"部分失敗",failed:"管線失敗",stale:"資料已過期",unknown:"尚無執行紀錄"};
+  const issueLabels = {auth:"X 登入驗證",rate_limit:"API 429 限流",source_http:"X HTTP 錯誤",long_post_hydration:"長文補抓",upstream:"上游服務",gemini_configuration:"Gemini 設定",analysis_validation:"貼文分析驗證",summary_validation:"摘要驗證",gemini:"Gemini",interrupted:"執行中斷",stage_failure:"階段失敗",runtime:"執行錯誤",scraper:"X 爬蟲"};
+  elements.healthPanel.replaceChildren();
+  const head = element("div", "health-head");
+  head.append(element("span", `health-dot ${status}`));
+  head.append(element("span", "", labels[status] || labels.unknown));
+  elements.healthPanel.append(head);
+  const run = health.latest_run;
+  if (run) {
+    const details = element("div", "health-detail");
+    details.append(element("div", "", `最後執行：${localDate(run.finished_at || run.started_at)}`));
+    details.append(element("div", "", `抓取 ${run.scraped_count}｜解析成功 ${run.parsed_count}｜失敗 ${run.parse_failed}`));
+    details.append(element("div", "", `語意摘要更新 ${run.summaries_updated}｜失敗 ${run.summaries_failed}`));
+    if (run.long_posts_attempted) details.append(element("div", "", `長文補抓 ${run.long_posts_succeeded}/${run.long_posts_attempted}`));
+    if (run.error_message) {
+      const issue = issueLabels[run.failure_kind] || run.failed_stage || "pipeline";
+      const code = run.failure_code ? ` (${run.failure_code})` : "";
+      details.append(element("div", "health-error", `${issue}${code}：${run.error_message}`));
+    }
+    elements.healthPanel.append(details);
+  }
+  const coverage = element("div", "health-detail", `語意摘要覆蓋 ${health.semantic_fresh}/${trackerData.tickers.length}；alias 待審核 ${health.alias_candidates_pending}`);
+  elements.healthPanel.append(coverage);
 }
 
 function readStoredList(key) {
@@ -439,6 +481,7 @@ function hasFilters() {
 function renderDashboard() {
   renderControls();
   renderRecent();
+  renderHealth();
   const period = currentPeriod();
   const snapshots = filteredSnapshots();
   elements.periodEyebrow.textContent = `${period.start} — ${period.end}`;
@@ -506,6 +549,16 @@ function sourceLink(post, label="查看原文 ↗") {
   return link;
 }
 
+function appendSemanticSources(container, sources) {
+  if (!Array.isArray(sources) || !sources.length) return;
+  const links = element("div", "semantic-sources");
+  sources.forEach((source) => {
+    const link = sourceLink(source, `${source.date || source.post_id} ↗`);
+    if (link) { link.className = "semantic-source"; links.append(link); }
+  });
+  if (links.childElementCount) container.append(links);
+}
+
 function trustNotice(post) {
   const info = qualityInfo(post.quality_status);
   const notice = element("div", "trust-notice");
@@ -526,6 +579,22 @@ function renderSummary(ticker) {
   const latest = ticker.posts[0];
   const fragment = document.createDocumentFragment();
   fragment.append(element("h2", "section-title", "最新摘要"));
+  const semantic = ticker.semantic_snapshot;
+  if (semantic) {
+    const semanticPanel = element("section", "semantic-panel");
+    const semanticHead = element("div", "semantic-head");
+    semanticHead.append(element("span", "semantic-label", "增量語意研究摘要"));
+    const quality = semantic.source_quality_counts || {};
+    const sourceCount = semantic.sources.length;
+    const lowerTrustCount = (quality.legacy || 0) + (quality.unverified || 0);
+    const freshness = semantic.is_stale ? "上一版 · 等待更新" : `更新 ${localDate(semantic.generated_at)}`;
+    const trust = lowerTrustCount ? `${sourceCount} 來源 · ${lowerTrustCount} 筆待覆核` : `${sourceCount} 來源`;
+    semanticHead.append(element("span", "semantic-status", `${freshness} · ${trust}`));
+    semanticPanel.append(semanticHead);
+    semanticPanel.append(element("div", "semantic-summary", semantic.summary));
+    appendSemanticSources(semanticPanel, semantic.sources);
+    fragment.append(semanticPanel);
+  }
   const panel = element("section", "latest-panel");
   const head = element("div", "latest-panel-head");
   head.append(element("span", `badge ${stanceClass(latest.sentiment)}`, latest.sentiment));
@@ -557,19 +626,28 @@ function renderEvolution(ticker) {
   const fragment = document.createDocumentFragment();
   fragment.append(element("h2", "section-title", "論點演變"));
   const timeline = element("div", "timeline");
-  ticker.evolution.forEach((event) => {
+  const semanticEvents = ticker.semantic_snapshot && ticker.semantic_snapshot.evolution;
+  const events = semanticEvents && semanticEvents.length ? semanticEvents : ticker.evolution;
+  if (semanticEvents && semanticEvents.length) fragment.append(element("div", "semantic-note", "由增量語意摘要整理；每項結論均保留來源。"));
+  const changeLabels = {new:"新論點",reinforced:"再次強化",reversed:"立場反轉",new_risk:"新增風險",corrected:"論點修正"};
+  events.forEach((event) => {
     const item = element("article", "timeline-item");
     const top = element("div", "timeline-top");
-    top.append(element("span", "timeline-type", event.change_type));
-    const eventMeta = element("div", "post-meta-left");
-    eventMeta.append(qualityBadge(event.quality_status));
-    eventMeta.append(element("span", "timeline-date", `${event.date} · ${event.sentiment}`));
-    top.append(eventMeta);
+    top.append(element("span", "timeline-type", changeLabels[event.change_type] || event.change_type));
+    if (event.quality_status) {
+      const eventMeta = element("div", "post-meta-left");
+      eventMeta.append(qualityBadge(event.quality_status));
+      eventMeta.append(element("span", "timeline-date", `${event.date} · ${event.sentiment}`));
+      top.append(eventMeta);
+    }
     item.append(top);
-    item.append(element("div", "timeline-summary", event.change_summary));
-    item.append(element("div", "timeline-thesis", event.thesis));
-    const link = sourceLink(event);
-    if (link) item.append(link);
+    if (event.change_summary) item.append(element("div", "timeline-summary", event.change_summary));
+    item.append(element("div", "timeline-thesis", event.summary || event.thesis));
+    if (event.sources) appendSemanticSources(item, event.sources);
+    else {
+      const link = sourceLink(event);
+      if (link) item.append(link);
+    }
     timeline.append(item);
   });
   fragment.append(timeline);
@@ -580,16 +658,25 @@ function renderKeyPoints(ticker) {
   const fragment = document.createDocumentFragment();
   fragment.append(element("h2", "section-title", "3 個關鍵觀點"));
   const grid = element("div", "key-grid");
-  ticker.key_points.forEach((point) => {
+  const semanticPoints = ticker.semantic_snapshot && ticker.semantic_snapshot.key_points;
+  const points = semanticPoints && semanticPoints.length ? semanticPoints : ticker.key_points;
+  if (semanticPoints && semanticPoints.length) fragment.append(element("div", "semantic-note", "語意分群後選出的代表觀點，不是單純取最新三篇。"));
+  points.forEach((point) => {
     const card = element("article", "key-card");
-    card.append(element("div", "key-why", point.why));
-    const pointMeta = element("div", "key-meta");
-    pointMeta.append(qualityBadge(point.quality_status));
-    pointMeta.append(element("div", "key-date", `${point.date} · ${point.sentiment}`));
-    card.append(pointMeta);
+    card.append(element("div", "key-why", point.title || point.why));
+    if (point.quality_status) {
+      const pointMeta = element("div", "key-meta");
+      pointMeta.append(qualityBadge(point.quality_status));
+      pointMeta.append(element("div", "key-date", `${point.date} · ${point.sentiment}`));
+      card.append(pointMeta);
+    }
     card.append(element("div", "key-thesis", point.thesis));
-    const link = sourceLink(point);
-    if (link) card.append(link);
+    if (point.title && point.why) card.append(element("div", "semantic-description", point.why));
+    if (point.sources) appendSemanticSources(card, point.sources);
+    else {
+      const link = sourceLink(point);
+      if (link) card.append(link);
+    }
     grid.append(card);
   });
   fragment.append(grid);
@@ -599,24 +686,31 @@ function renderKeyPoints(ticker) {
 function renderRisks(ticker) {
   const fragment = document.createDocumentFragment();
   fragment.append(element("h2", "section-title", "作者曾明確提到的風險"));
-  if (!ticker.risk_groups.length) {
+  const semanticRisks = ticker.semantic_snapshot && ticker.semantic_snapshot.risks;
+  const risks = semanticRisks && semanticRisks.length ? semanticRisks : ticker.risk_groups;
+  if (!risks.length) {
     fragment.append(element("div", "no-data", "目前沒有找到作者對這檔股票明確指出的風險。這不代表股票沒有風險。"));
     return fragment;
   }
+  if (semanticRisks && semanticRisks.length) fragment.append(element("div", "semantic-note", "相近風險已由語意摘要合併，並保留支持來源。"));
   const list = element("div", "risk-list");
-  ticker.risk_groups.forEach((risk) => {
+  risks.forEach((risk) => {
     const card = element("article", "risk-card");
     const head = element("div", "risk-head");
-    head.append(element("div", "risk-name", risk.risk));
-    head.append(element("span", "risk-count", `${risk.count} 次`));
+    head.append(element("div", "risk-name", risk.name || risk.risk));
+    if (risk.count) head.append(element("span", "risk-count", `${risk.count} 次`));
     card.append(head);
-    card.append(element("div", "risk-dates", `${risk.first_date} — ${risk.last_date}`));
-    const sources = element("div", "risk-sources");
-    risk.occurrences.forEach((occurrence) => {
-      const link = sourceLink(occurrence, `${occurrence.date} ↗`);
-      if (link) { link.className = "risk-source"; sources.append(link); }
-    });
-    card.append(sources);
+    if (risk.summary) card.append(element("div", "semantic-description", risk.summary));
+    if (risk.first_date) card.append(element("div", "risk-dates", `${risk.first_date} — ${risk.last_date}`));
+    if (risk.sources) appendSemanticSources(card, risk.sources);
+    else {
+      const sources = element("div", "risk-sources");
+      risk.occurrences.forEach((occurrence) => {
+        const link = sourceLink(occurrence, `${occurrence.date} ↗`);
+        if (link) { link.className = "risk-source"; sources.append(link); }
+      });
+      card.append(sources);
+    }
     list.append(card);
   });
   fragment.append(list);

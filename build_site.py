@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -204,6 +205,98 @@ def _prefer_post(
     return current
 
 
+def ticker_fingerprint(ticker: dict[str, object]) -> str:
+    """Hash only effective research inputs so unchanged tickers stay cached."""
+    payload = [
+        {
+            "post_id": post["post_id"],
+            "sentiment": post["sentiment"],
+            "thesis": post["thesis"],
+            "risks": post.get("risks"),
+            "quality_status": post["quality_status"],
+            "reviewed_at": post.get("reviewed_at"),
+        }
+        for post in ticker["posts"]
+    ]
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _json_list(value: str | None) -> list[dict[str, object]]:
+    try:
+        parsed = json.loads(value or "[]")
+    except json.JSONDecodeError:
+        return []
+    return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+
+
+def _source_references(
+    post_ids: object,
+    posts_by_id: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    if not isinstance(post_ids, list):
+        return []
+    references = []
+    for post_id in dict.fromkeys(str(value) for value in post_ids):
+        post = posts_by_id.get(post_id)
+        if post:
+            references.append(
+                {
+                    "post_id": post_id,
+                    "date": post["date"],
+                    "url": post["url"],
+                    "quality_status": post["quality_status"],
+                }
+            )
+    return references
+
+
+def _semantic_snapshot(
+    row: object | None,
+    ticker: dict[str, object],
+) -> dict[str, object] | None:
+    if row is None or not row["summary"]:
+        return None
+    posts_by_id = {str(post["post_id"]): post for post in ticker["posts"]}
+
+    def enrich(items: list[dict[str, object]]) -> list[dict[str, object]]:
+        return [
+            {
+                **item,
+                "sources": _source_references(
+                    item.get("source_post_ids"),
+                    posts_by_id,
+                ),
+            }
+            for item in items
+        ]
+
+    try:
+        source_ids = json.loads(row["source_post_ids_json"] or "[]")
+    except json.JSONDecodeError:
+        source_ids = []
+    sources = _source_references(source_ids, posts_by_id)
+    source_quality_counts = {
+        status: sum(1 for source in sources if source["quality_status"] == status)
+        for status in ("manual", "verified", "legacy", "unverified")
+    }
+    return {
+        "summary": row["summary"],
+        "sources": sources,
+        "source_quality_counts": source_quality_counts,
+        "evolution": enrich(_json_list(row["evolution_json"])),
+        "key_points": enrich(_json_list(row["key_points_json"])),
+        "risks": enrich(_json_list(row["risks_json"])),
+        "analysis_version": row["analysis_version"],
+        "generated_at": row["generated_at"],
+        "status": row["status"],
+        "is_stale": (
+            row["status"] == "failed"
+            or row["source_fingerprint"] != ticker_fingerprint(ticker)
+        ),
+    }
+
+
 def load_dashboard_data(
     db_path: Path = DB_PATH,
     aliases_path: Path = ALIASES_PATH,
@@ -234,9 +327,24 @@ def load_dashboard_data(
             ORDER BY p.timestamp DESC, p.post_id DESC, m.id ASC
             """
         ).fetchall()
+        snapshot_rows = connection.execute(
+            "SELECT * FROM ticker_snapshots ORDER BY ticker"
+        ).fetchall()
+        pipeline_rows = connection.execute(
+            "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+        pending_alias_candidates = int(
+            connection.execute(
+                """
+                SELECT COUNT(*) FROM ticker_alias_candidates
+                WHERE status = 'pending'
+                """
+            ).fetchone()[0]
+        )
     finally:
         connection.close()
 
+    snapshots_by_ticker = {row["ticker"]: row for row in snapshot_rows}
     grouped: dict[str, dict[str, object]] = {}
     all_dates: list[date] = []
     for row in rows:
@@ -316,8 +424,7 @@ def load_dashboard_data(
             quality_counts[post["quality_status"]] += 1
         profile = ticker_data["profile"]
         configured_aliases = [canonical, *profile["aliases"]]
-        tickers.append(
-            {
+        ticker_record = {
                 "ticker": canonical,
                 "company_name": profile["company_name"],
                 "exchange": profile["exchange"],
@@ -337,7 +444,11 @@ def load_dashboard_data(
                 "key_points": _select_key_points(posts),
                 "risk_groups": _aggregate_risks(posts),
             }
+        ticker_record["semantic_snapshot"] = _semantic_snapshot(
+            snapshots_by_ticker.get(canonical),
+            ticker_record,
         )
+        tickers.append(ticker_record)
 
     tickers.sort(key=lambda item: (item["latest_date"], item["ticker"]), reverse=True)
     dataset_end = max(all_dates) if all_dates else date.today()
@@ -371,11 +482,53 @@ def load_dashboard_data(
             "post_count": len(period_post_ids),
         }
 
+    recent_runs = [dict(row) for row in pipeline_rows]
+    latest_run = recent_runs[0] if recent_runs else None
+    if latest_run is None:
+        health_status = "unknown"
+    elif latest_run["status"] == "running":
+        health_status = "running"
+    elif latest_run["status"] == "failed":
+        health_status = "failed"
+    elif latest_run["status"] == "partial":
+        health_status = "partial"
+    else:
+        finished_at = latest_run.get("finished_at")
+        try:
+            finished = datetime.fromisoformat(finished_at) if finished_at else None
+        except ValueError:
+            finished = None
+        if finished and finished.tzinfo is None:
+            finished = finished.replace(tzinfo=timezone.utc)
+        health_status = (
+            "stale"
+            if finished and datetime.now(timezone.utc) - finished > timedelta(hours=3)
+            else "healthy"
+        )
+    semantic_total = sum(
+        1 for ticker in tickers if ticker["semantic_snapshot"] is not None
+    )
+    semantic_fresh = sum(
+        1
+        for ticker in tickers
+        if ticker["semantic_snapshot"] is not None
+        and not ticker["semantic_snapshot"]["is_stale"]
+    )
+
     return {
         "generated_at": utc_now(),
         "dataset_start": dataset_start.isoformat(),
         "dataset_end": dataset_end.isoformat(),
         "quality_totals": quality_totals,
+        "health": {
+            "status": health_status,
+            "latest_run": latest_run,
+            "recent_runs": recent_runs,
+            "semantic_total": semantic_total,
+            "semantic_fresh": semantic_fresh,
+            "semantic_pending": max(0, len(tickers) - semantic_fresh),
+            "alias_candidates_pending": pending_alias_candidates,
+        },
         "periods": period_data,
         "tickers": tickers,
     }

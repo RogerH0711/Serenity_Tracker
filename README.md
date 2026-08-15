@@ -14,6 +14,9 @@ Serenity Tracker 會定期抓取指定 X 帳號近期貼文，從明示的 casht
 - 每個立場必須附上輸入原文中的逐字證據，本地驗證找不到該證據時拒絕寫入；方向不明時使用 Neutral。
 - 每筆分析會顯示可信度：人工覆核、證據已核對、舊資料未驗證或待覆核；有逐字證據不等於解讀一定正確，仍應閱讀原文。
 - 人工修正獨立存放在 `mention_overrides`，建站時優先於模型結果，Gemini 重新解析也不會覆蓋人工決定。
+- 每次執行會保存抓取、長文補抓、解析、語意摘要與建站健康狀態，網站可辨識正常、部分失敗及資料過期。
+- 個股語意摘要使用內容指紋增量更新；沒有新貼文時不呼叫 Gemini，失敗時保留上一版或回退規則式整理。
+- 新 ticker alias 只會進入待審核清單，必須人工核准後才會更新 `ticker_aliases.json`。
 - 重新解析失敗時保留最後一版成功分析；程式設定造成的 4xx 會立即停止管線，不會誤報成功。
 - 每階段採原子檔案替換；爬蟲失敗時不會讓下游誤用舊 JSON。
 - 靜態頁面使用 DOM `textContent` 渲染外部資料，不使用 `innerHTML`。
@@ -29,10 +32,12 @@ X profile
                          │
                          └─ parser.py ──> posts + mentions (SQLite)
                                                 │
+                                                ├─ summarize.py ──> ticker_snapshots
+                                                ├─ alias_review.py scan ──> alias candidates
                                                 └─ build_site.py ──> index.html (atomic)
 ```
 
-SQLite 使用三張核心資料表：
+SQLite 的主要資料表：
 
 ```text
 posts(post_id PK, timestamp, text, context, url, parse_status, analysis_version, ...)
@@ -40,6 +45,9 @@ posts(post_id PK, timestamp, text, context, url, parse_status, analysis_version,
        UNIQUE(post_id, ticker)
   └─ mention_overrides(post_id, ticker, sentiment, evidence, thesis, risks, review_note, ...)
        PRIMARY KEY(post_id, ticker)
+pipeline_runs(run metrics, status, failed_stage, timestamps, ...)
+ticker_snapshots(ticker PK, source_fingerprint, semantic summary, source ids, ...)
+ticker_alias_candidates(canonical_ticker, alias, confidence, review status, ...)
 ```
 
 `parse_status` 會記錄 `pending`、`completed` 或 `failed`。暫時失敗的項目會在下一次排程重試；遇到 429/503 時會停止本次剩餘 API 呼叫，避免連續撞擊服務。歷史 `legacy-v1` 分析不會只因程式版本改變而自動重跑，避免舊資料突然消失或大量消耗配額。
@@ -70,6 +78,7 @@ GEMINI_MODEL=gemini-2.5-flash
 SCRAPE_SCROLL_ROUNDS=3
 SCRAPE_MAX_POSTS=40
 PARSER_MAX_POSTS=20
+SUMMARY_MAX_TICKERS=2
 ```
 
 請把 `.env` 視為密碼檔案，不要提交或貼到日誌。透過 Session Cookie 自動存取 X 也可能受平台規則或登入驗證變化影響，部署前請自行確認適用條款。
@@ -85,7 +94,9 @@ PARSER_MAX_POSTS=20
 1. 初始化或遷移資料庫。
 2. 成功抓取並原子更新 `raw_tweets.json`。
 3. 只解析資料庫中尚未完成的貼文。
-4. 從資料庫重新生成 `index.html`。
+4. 只更新內容有變化的個股語意摘要。
+5. 掃描新的 ticker alias 候選。
+6. 從資料庫重新生成 `index.html`。
 
 ### 儀表板查詢
 
@@ -164,6 +175,41 @@ venv/bin/python build_site.py
 
 `--risks` 可省略。用 `review.py list` 查看所有覆核，用 `review.py delete POST_ID TICKER` 刪除後即可恢復模型結果。覆核備註、覆核者與時間會進入產生的公開 `index.html`，請勿填入敏感資訊。
 
+### Pipeline 健康狀態
+
+`pipeline_runs` 會保存每次執行的抓取數、長文補抓結果、解析成功／失敗、語意摘要更新／失敗、alias 候選數、失敗階段與錯誤分類。X 登入失效及 API 429 限流會分開標示，網站側欄會顯示：
+
+- `資料正常`：最近一次管線完整成功。
+- `部分失敗`：長文補抓、解析或語意摘要有部分失敗。
+- `管線失敗`：最近一次執行未完成。
+- `資料已過期`：最後完成時間距今超過三小時。
+
+純靜態網站無法在失敗發生的當下自行更新；失敗紀錄會在下一次成功建站後出現在公開頁面，本機資料庫則會立即保存。
+
+### 增量個股語意摘要
+
+`summarize.py` 只選擇內容指紋改變或尚未建立摘要的 ticker。每次管線預設最多處理兩組，避免一次消耗大量 Gemini 額度：
+
+```bash
+venv/bin/python summarize.py
+venv/bin/python summarize.py --ticker SIVE
+```
+
+語意摘要會整理目前論點、`new / reinforced / reversed / new_risk / corrected` 演變、三個代表觀點與相近風險。每個結論都必須引用輸入內的 `post_id`；模型回傳未知來源時會拒絕儲存。沒有語意摘要或更新失敗時，網站繼續使用原本的規則式整理。
+
+### Alias 待審核流程
+
+管線只會用保守規則偵測「相同基本代碼＋交易所後綴」及可能的 `F-share`，不會自動合併：
+
+```bash
+venv/bin/python alias_review.py scan
+venv/bin/python alias_review.py list
+venv/bin/python alias_review.py approve 3 --company-name "Company Name" --exchange NASDAQ
+venv/bin/python alias_review.py reject 4 --note "不同公司"
+```
+
+核准時才會原子更新 `ticker_aliases.json`；拒絕結果留在 SQLite，後續掃描不會再次變成待審核。
+
 ### 舊資料庫遷移
 
 第一次執行新版 `db_setup.py` 時，若偵測到舊版扁平 `mentions` 表，系統會：
@@ -211,7 +257,7 @@ venv/bin/python build_site.py
 venv/bin/python -m unittest discover -s tests -v
 ```
 
-涵蓋舊資料遷移、重複寫入、人工覆核持久性、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。
+涵蓋舊資料遷移、重複寫入、人工覆核持久性、管線健康紀錄、增量語意摘要、alias 審核、增量與指定重析、引用脈絡、立場證據驗證、cashtag 擷取，以及靜態 HTML 的 script/XSS escaping。
 
 ## GitHub Pages 與雲端排程
 

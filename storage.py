@@ -83,6 +83,76 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            status TEXT NOT NULL DEFAULT 'running'
+                CHECK (status IN ('running', 'success', 'partial', 'failed')),
+            current_stage TEXT NOT NULL DEFAULT 'database',
+            scraped_count INTEGER NOT NULL DEFAULT 0 CHECK (scraped_count >= 0),
+            long_posts_attempted INTEGER NOT NULL DEFAULT 0
+                CHECK (long_posts_attempted >= 0),
+            long_posts_succeeded INTEGER NOT NULL DEFAULT 0
+                CHECK (long_posts_succeeded >= 0),
+            long_posts_failed INTEGER NOT NULL DEFAULT 0
+                CHECK (long_posts_failed >= 0),
+            parsed_count INTEGER NOT NULL DEFAULT 0 CHECK (parsed_count >= 0),
+            parse_failed INTEGER NOT NULL DEFAULT 0 CHECK (parse_failed >= 0),
+            mentions_written INTEGER NOT NULL DEFAULT 0
+                CHECK (mentions_written >= 0),
+            summaries_updated INTEGER NOT NULL DEFAULT 0
+                CHECK (summaries_updated >= 0),
+            summaries_failed INTEGER NOT NULL DEFAULT 0
+                CHECK (summaries_failed >= 0),
+            alias_candidates_found INTEGER NOT NULL DEFAULT 0
+                CHECK (alias_candidates_found >= 0),
+            latest_source_timestamp TEXT,
+            failed_stage TEXT,
+            failure_kind TEXT,
+            failure_code INTEGER,
+            error_message TEXT,
+            site_generated_at TEXT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS ticker_snapshots (
+            ticker TEXT PRIMARY KEY,
+            source_fingerprint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL
+                CHECK (status IN ('completed', 'failed')),
+            latest_sentiment TEXT
+                CHECK (latest_sentiment IN ('Bullish', 'Bearish', 'Neutral')),
+            summary TEXT,
+            evolution_json TEXT NOT NULL DEFAULT '[]',
+            key_points_json TEXT NOT NULL DEFAULT '[]',
+            risks_json TEXT NOT NULL DEFAULT '[]',
+            source_post_ids_json TEXT NOT NULL DEFAULT '[]',
+            covered_post_ids_json TEXT NOT NULL DEFAULT '[]',
+            analysis_version TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            last_error TEXT,
+            generated_at TEXT,
+            updated_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS ticker_alias_candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            canonical_ticker TEXT NOT NULL,
+            alias TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'approved', 'rejected')),
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            reviewed_at TEXT,
+            review_note TEXT NOT NULL DEFAULT '',
+            UNIQUE (canonical_ticker, alias)
+        )
+        """,
+        """
         CREATE INDEX IF NOT EXISTS idx_posts_status_timestamp
             ON posts(parse_status, timestamp DESC)
         """,
@@ -93,6 +163,14 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_overrides_reviewed_at
             ON mention_overrides(reviewed_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_snapshots_status
+            ON ticker_snapshots(status)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_alias_candidates_status_last_seen
+            ON ticker_alias_candidates(status, last_seen_at DESC)
         """,
     )
     for statement in statements:
@@ -105,7 +183,7 @@ def _upgrade_current_schema(
     db_path: Path,
     backup_dir: Path | None,
 ) -> Path | None:
-    """Add non-destructive context/evidence columns to an existing v2 database."""
+    """Add non-destructive columns required by newer application versions."""
     posts_columns = _table_columns(connection, "posts")
     mentions_columns = _table_columns(connection, "mentions")
     needs_post_context = bool(posts_columns) and "context" not in posts_columns
@@ -114,7 +192,21 @@ def _upgrade_current_schema(
         and "post_id" in mentions_columns
         and "sentiment_evidence" not in mentions_columns
     )
-    if not needs_post_context and not needs_sentiment_evidence:
+    pipeline_columns = _table_columns(connection, "pipeline_runs")
+    needs_failure_kind = (
+        bool(pipeline_columns) and "failure_kind" not in pipeline_columns
+    )
+    needs_failure_code = (
+        bool(pipeline_columns) and "failure_code" not in pipeline_columns
+    )
+    if not any(
+        (
+            needs_post_context,
+            needs_sentiment_evidence,
+            needs_failure_kind,
+            needs_failure_code,
+        )
+    ):
         return None
 
     backup_path = _backup_database(db_path, backup_dir)
@@ -131,6 +223,10 @@ def _upgrade_current_schema(
                 ADD COLUMN sentiment_evidence TEXT NOT NULL DEFAULT ''
                 """
             )
+        if needs_failure_kind:
+            connection.execute("ALTER TABLE pipeline_runs ADD COLUMN failure_kind TEXT")
+        if needs_failure_code:
+            connection.execute("ALTER TABLE pipeline_runs ADD COLUMN failure_code INTEGER")
         connection.commit()
     except Exception:
         connection.rollback()
@@ -430,6 +526,377 @@ def list_mention_overrides(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def start_pipeline_run(connection: sqlite3.Connection) -> int:
+    cursor = connection.execute(
+        """
+        INSERT INTO pipeline_runs (started_at, status, current_stage)
+        VALUES (?, 'running', 'database')
+        """,
+        (utc_now(),),
+    )
+    connection.commit()
+    return int(cursor.lastrowid)
+
+
+def mark_abandoned_pipeline_runs(connection: sqlite3.Connection) -> int:
+    """Close runs left open after an OS kill or interrupted terminal session."""
+    cursor = connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET finished_at = ?, status = 'failed', failed_stage = current_stage,
+            failure_kind = 'interrupted',
+            error_message = '前次程序在完成前中斷', current_stage = 'finished'
+        WHERE status = 'running'
+        """,
+        (utc_now(),),
+    )
+    connection.commit()
+    return int(cursor.rowcount)
+
+
+def update_pipeline_stage(
+    connection: sqlite3.Connection,
+    run_id: int,
+    stage: str,
+) -> None:
+    connection.execute(
+        "UPDATE pipeline_runs SET current_stage = ? WHERE id = ?",
+        (stage, run_id),
+    )
+    connection.commit()
+
+
+def record_pipeline_scrape(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    scraped_count: int,
+    long_posts_attempted: int,
+    long_posts_succeeded: int,
+    long_posts_failed: int,
+    latest_source_timestamp: str | None,
+) -> None:
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET scraped_count = ?, long_posts_attempted = ?,
+            long_posts_succeeded = ?, long_posts_failed = ?,
+            latest_source_timestamp = ?
+        WHERE id = ?
+        """,
+        (
+            scraped_count,
+            long_posts_attempted,
+            long_posts_succeeded,
+            long_posts_failed,
+            latest_source_timestamp,
+            run_id,
+        ),
+    )
+    connection.commit()
+
+
+def record_pipeline_parse(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    parsed_count: int,
+    parse_failed: int,
+    mentions_written: int,
+) -> None:
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET parsed_count = ?, parse_failed = ?, mentions_written = ?
+        WHERE id = ?
+        """,
+        (parsed_count, parse_failed, mentions_written, run_id),
+    )
+    connection.commit()
+
+
+def record_pipeline_summaries(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    updated: int,
+    failed: int,
+) -> None:
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET summaries_updated = ?, summaries_failed = ?
+        WHERE id = ?
+        """,
+        (updated, failed, run_id),
+    )
+    connection.commit()
+
+
+def record_pipeline_alias_candidates(
+    connection: sqlite3.Connection,
+    run_id: int,
+    found: int,
+) -> None:
+    connection.execute(
+        "UPDATE pipeline_runs SET alias_candidates_found = ? WHERE id = ?",
+        (found, run_id),
+    )
+    connection.commit()
+
+
+def record_pipeline_issue(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    stage: str,
+    failure_kind: str,
+    error_message: str,
+    failure_code: int | None = None,
+) -> None:
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET failed_stage = ?, failure_kind = ?, failure_code = ?,
+            error_message = ?
+        WHERE id = ?
+        """,
+        (
+            stage,
+            failure_kind,
+            failure_code,
+            error_message[:1000],
+            run_id,
+        ),
+    )
+    connection.commit()
+
+
+def finish_pipeline_run(
+    connection: sqlite3.Connection,
+    run_id: int,
+    *,
+    status: str,
+    failed_stage: str | None = None,
+    failure_kind: str | None = None,
+    failure_code: int | None = None,
+    error_message: str | None = None,
+    site_generated_at: str | None = None,
+) -> None:
+    if status not in {"success", "partial", "failed"}:
+        raise ValueError(f"無效 pipeline status：{status}")
+    connection.execute(
+        """
+        UPDATE pipeline_runs
+        SET finished_at = ?, status = ?, current_stage = 'finished',
+            failed_stage = COALESCE(?, failed_stage),
+            failure_kind = COALESCE(?, failure_kind),
+            failure_code = COALESCE(?, failure_code),
+            error_message = COALESCE(?, error_message),
+            site_generated_at = COALESCE(?, site_generated_at)
+        WHERE id = ?
+        """,
+        (
+            utc_now(),
+            status,
+            failed_stage,
+            failure_kind,
+            failure_code,
+            (error_message or "")[:1000] or None,
+            site_generated_at,
+            run_id,
+        ),
+    )
+    connection.commit()
+
+
+def get_pipeline_run(
+    connection: sqlite3.Connection,
+    run_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM pipeline_runs WHERE id = ?",
+        (run_id,),
+    ).fetchone()
+
+
+def recent_pipeline_runs(
+    connection: sqlite3.Connection,
+    limit: int = 5,
+) -> list[sqlite3.Row]:
+    return connection.execute(
+        "SELECT * FROM pipeline_runs ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def get_ticker_snapshots(
+    connection: sqlite3.Connection,
+) -> list[sqlite3.Row]:
+    return connection.execute(
+        "SELECT * FROM ticker_snapshots ORDER BY ticker"
+    ).fetchall()
+
+
+def save_ticker_snapshot(
+    connection: sqlite3.Connection,
+    *,
+    ticker: str,
+    source_fingerprint: str,
+    latest_sentiment: str,
+    summary: str,
+    evolution_json: str,
+    key_points_json: str,
+    risks_json: str,
+    source_post_ids_json: str,
+    covered_post_ids_json: str,
+    analysis_version: str,
+) -> None:
+    now = utc_now()
+    connection.execute(
+        """
+        INSERT INTO ticker_snapshots (
+            ticker, source_fingerprint, status, latest_sentiment, summary,
+            evolution_json, key_points_json, risks_json,
+            source_post_ids_json, covered_post_ids_json, analysis_version,
+            attempts, last_error, generated_at, updated_at
+        ) VALUES (?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?, ?)
+        ON CONFLICT(ticker) DO UPDATE SET
+            source_fingerprint = excluded.source_fingerprint,
+            status = 'completed',
+            latest_sentiment = excluded.latest_sentiment,
+            summary = excluded.summary,
+            evolution_json = excluded.evolution_json,
+            key_points_json = excluded.key_points_json,
+            risks_json = excluded.risks_json,
+            source_post_ids_json = excluded.source_post_ids_json,
+            covered_post_ids_json = excluded.covered_post_ids_json,
+            analysis_version = excluded.analysis_version,
+            attempts = ticker_snapshots.attempts + 1,
+            last_error = NULL,
+            generated_at = excluded.generated_at,
+            updated_at = excluded.updated_at
+        """,
+        (
+            ticker.strip().upper(),
+            source_fingerprint,
+            latest_sentiment,
+            summary.strip(),
+            evolution_json,
+            key_points_json,
+            risks_json,
+            source_post_ids_json,
+            covered_post_ids_json,
+            analysis_version,
+            now,
+            now,
+        ),
+    )
+    connection.commit()
+
+
+def mark_ticker_snapshot_failed(
+    connection: sqlite3.Connection,
+    *,
+    ticker: str,
+    error: str,
+    analysis_version: str,
+) -> None:
+    now = utc_now()
+    connection.execute(
+        """
+        INSERT INTO ticker_snapshots (
+            ticker, status, analysis_version, attempts, last_error, updated_at
+        ) VALUES (?, 'failed', ?, 1, ?, ?)
+        ON CONFLICT(ticker) DO UPDATE SET
+            status = 'failed',
+            attempts = ticker_snapshots.attempts + 1,
+            last_error = excluded.last_error,
+            updated_at = excluded.updated_at
+        """,
+        (ticker.strip().upper(), analysis_version, error[:1000], now),
+    )
+    connection.commit()
+
+
+def upsert_alias_candidate(
+    connection: sqlite3.Connection,
+    *,
+    canonical_ticker: str,
+    alias: str,
+    reason: str,
+    confidence: float,
+) -> bool:
+    now = utc_now()
+    existing = connection.execute(
+        """
+        SELECT id FROM ticker_alias_candidates
+        WHERE canonical_ticker = ? AND alias = ?
+        """,
+        (canonical_ticker, alias),
+    ).fetchone()
+    connection.execute(
+        """
+        INSERT INTO ticker_alias_candidates (
+            canonical_ticker, alias, reason, confidence,
+            status, first_seen_at, last_seen_at
+        ) VALUES (?, ?, ?, ?, 'pending', ?, ?)
+        ON CONFLICT(canonical_ticker, alias) DO UPDATE SET
+            reason = excluded.reason,
+            confidence = excluded.confidence,
+            last_seen_at = excluded.last_seen_at
+        """,
+        (canonical_ticker, alias, reason, confidence, now, now),
+    )
+    connection.commit()
+    return existing is None
+
+
+def list_alias_candidates(
+    connection: sqlite3.Connection,
+    status: str | None = "pending",
+) -> list[sqlite3.Row]:
+    if status is None:
+        return connection.execute(
+            "SELECT * FROM ticker_alias_candidates ORDER BY last_seen_at DESC, id"
+        ).fetchall()
+    return connection.execute(
+        """
+        SELECT * FROM ticker_alias_candidates
+        WHERE status = ?
+        ORDER BY confidence DESC, last_seen_at DESC, id
+        """,
+        (status,),
+    ).fetchall()
+
+
+def review_alias_candidate(
+    connection: sqlite3.Connection,
+    candidate_id: int,
+    *,
+    status: str,
+    note: str = "",
+) -> sqlite3.Row | None:
+    if status not in {"approved", "rejected"}:
+        raise ValueError(f"無效 alias review status：{status}")
+    candidate = connection.execute(
+        "SELECT * FROM ticker_alias_candidates WHERE id = ?",
+        (candidate_id,),
+    ).fetchone()
+    if candidate is None:
+        return None
+    connection.execute(
+        """
+        UPDATE ticker_alias_candidates
+        SET status = ?, reviewed_at = ?, review_note = ?
+        WHERE id = ?
+        """,
+        (status, utc_now(), note.strip(), candidate_id),
+    )
+    connection.commit()
+    return candidate
+
+
 def store_analysis(
     connection: sqlite3.Connection,
     post_id: str,
@@ -504,7 +971,12 @@ def database_counts(db_path: Path = DB_PATH) -> dict[str, int]:
                 (SELECT COUNT(*) FROM mentions) AS mentions,
                 (SELECT COUNT(*) FROM posts WHERE parse_status = 'pending') AS pending,
                 (SELECT COUNT(*) FROM posts WHERE parse_status = 'failed') AS failed,
-                (SELECT COUNT(*) FROM mention_overrides) AS overrides
+                (SELECT COUNT(*) FROM mention_overrides) AS overrides,
+                (SELECT COUNT(*) FROM pipeline_runs) AS pipeline_runs,
+                (SELECT COUNT(*) FROM ticker_snapshots
+                    WHERE summary IS NOT NULL) AS snapshots,
+                (SELECT COUNT(*) FROM ticker_alias_candidates
+                    WHERE status = 'pending') AS alias_candidates
             """
         ).fetchone()
         return {key: int(row[key]) for key in row.keys()}

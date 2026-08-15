@@ -24,6 +24,8 @@ from storage import (
     mark_parse_failed,
     mark_posts_pending,
     pending_posts,
+    record_pipeline_issue,
+    record_pipeline_parse,
     register_posts,
     store_analysis,
 )
@@ -124,7 +126,23 @@ def _error_code(error: Exception) -> int | None:
     for code in (429, 500, 502, 503, 504):
         if str(code) in message:
             return code
+    status_match = re.search(r"\b([45]\d{2})\b", message)
+    if status_match:
+        return int(status_match.group(1))
     return None
+
+
+def _failure_kind(error: Exception) -> str:
+    code = _error_code(error)
+    if code == 429:
+        return "rate_limit"
+    if code is not None and code >= 500:
+        return "upstream"
+    if code is not None and code >= 400:
+        return "gemini_configuration"
+    if isinstance(error, (ValidationError, ValueError)):
+        return "analysis_validation"
+    return "gemini"
 
 
 def _normalize_analysis(
@@ -311,6 +329,16 @@ def parse_tweets(
                 mark_parse_failed(connection, post["post_id"], str(error))
                 print(f"[{index}/{len(queue)}] {post['post_id']} 解析失敗：{error}")
                 error_code = _error_code(error)
+                run_id = os.getenv("SERENITY_PIPELINE_RUN_ID", "").strip()
+                if run_id.isdigit():
+                    record_pipeline_issue(
+                        connection,
+                        int(run_id),
+                        stage="parser",
+                        failure_kind=_failure_kind(error),
+                        failure_code=error_code,
+                        error_message=str(error),
+                    )
                 if error_code is not None and 400 <= error_code < 500 and error_code != 429:
                     raise RuntimeError(
                         f"Gemini 請求設定錯誤 ({error_code})，已停止本次解析"
@@ -347,7 +375,41 @@ def main() -> None:
             force_post_ids=arguments.reparse,
         )
     except Exception as error:
+        run_id = os.getenv("SERENITY_PIPELINE_RUN_ID", "").strip()
+        if run_id.isdigit():
+            connection = connect_db(DB_PATH)
+            try:
+                record_pipeline_parse(
+                    connection,
+                    int(run_id),
+                    parsed_count=0,
+                    parse_failed=1,
+                    mentions_written=0,
+                )
+                record_pipeline_issue(
+                    connection,
+                    int(run_id),
+                    stage="parser",
+                    failure_kind=_failure_kind(error),
+                    failure_code=_error_code(error),
+                    error_message=str(error),
+                )
+            finally:
+                connection.close()
         raise SystemExit(f"解析階段失敗：{error}") from error
+    run_id = os.getenv("SERENITY_PIPELINE_RUN_ID", "").strip()
+    if run_id.isdigit():
+        connection = connect_db(DB_PATH)
+        try:
+            record_pipeline_parse(
+                connection,
+                int(run_id),
+                parsed_count=result["completed"],
+                parse_failed=result["failed"],
+                mentions_written=result["mentions"],
+            )
+        finally:
+            connection.close()
     if result["failed"]:
         raise SystemExit(
             f"解析階段未完全成功：{result['failed']} 則失敗，留待下次重試。"

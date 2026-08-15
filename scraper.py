@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -16,6 +17,12 @@ from common import (
     canonical_x_url,
     extract_post_id,
     is_safe_x_url,
+)
+from storage import (
+    DB_PATH,
+    connect_db,
+    record_pipeline_issue,
+    record_pipeline_scrape,
 )
 
 
@@ -32,6 +39,19 @@ def _positive_int(name: str, default: int) -> int:
     if value < 1:
         raise ValueError(f"{name} 必須大於 0")
     return value
+
+
+def _failure_details(error: Exception) -> tuple[str, int | None]:
+    message = str(error)
+    if "X_AUTH_TOKEN" in message or "登入" in message or "/login" in message:
+        return "auth", None
+    status_match = re.search(r"HTTP\s+(\d{3})", message, flags=re.IGNORECASE)
+    status = int(status_match.group(1)) if status_match else None
+    if status == 429:
+        return "rate_limit", status
+    if status is not None:
+        return "source_http", status
+    return "scraper", None
 
 
 async def _extract_post(article: ElementHandle) -> dict[str, str] | None:
@@ -95,11 +115,12 @@ async def _find_post_on_page(
 async def _hydrate_long_posts(
     context: BrowserContext,
     posts: list[dict[str, str]],
-) -> None:
+) -> dict[str, int]:
     """Read truncated posts on an isolated detail page without navigating profile."""
     targets = [post for post in posts if post.pop("_needs_full_text", "")]
+    stats = {"attempted": len(targets), "succeeded": 0, "failed": 0}
     if not targets:
-        return
+        return stats
     detail_page = await context.new_page()
     try:
         for post in targets:
@@ -114,16 +135,23 @@ async def _hydrate_long_posts(
                     timeout=15_000,
                 )
                 full_post = await _find_post_on_page(detail_page, post["post_id"])
-                if full_post and len(full_post["text"]) > len(post["text"]):
-                    post["text"] = full_post["text"]
-                    post["context"] = full_post["context"]
+                if full_post:
+                    if len(full_post["text"]) > len(post["text"]):
+                        post["text"] = full_post["text"]
+                        post["context"] = full_post["context"]
+                    stats["succeeded"] += 1
+                else:
+                    stats["failed"] += 1
+                    print(f"警告：長貼文 {post['post_id']} 詳情頁找不到原始貼文")
             except Exception as error:
+                stats["failed"] += 1
                 print(
                     f"警告：無法取得長貼文 {post['post_id']} 全文，"
                     f"將使用時間軸文字：{error}"
                 )
     finally:
         await detail_page.close()
+    return stats
 
 
 async def _collect_visible_posts(
@@ -151,7 +179,7 @@ async def scrape_tweets(
     output_path: Path = RAW_TWEETS_PATH,
     scroll_rounds: int = 3,
     max_posts: int = 40,
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], dict[str, int]]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         try:
@@ -202,26 +230,27 @@ async def scrape_tweets(
             if not tweets:
                 raise RuntimeError("沒有取得任何有效貼文；保留既有 raw_tweets.json")
 
-            await _hydrate_long_posts(context, tweets)
+            long_post_stats = await _hydrate_long_posts(context, tweets)
             for tweet in tweets:
                 tweet.pop("_needs_full_text", None)
 
             atomic_write_json(output_path, tweets)
             print(f"抓取完成：原子寫入 {len(tweets)} 則貼文至 {output_path.name}")
-            return tweets
+            return tweets, long_post_stats
         finally:
             await browser.close()
 
 
-def main() -> None:
+def main() -> dict[str, int]:
     load_dotenv(PROJECT_DIR / ".env")
     auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
     if not auth_token:
         raise SystemExit("錯誤：找不到 X_AUTH_TOKEN，請檢查 .env 設定。")
 
     target_account = os.getenv("X_TARGET_ACCOUNT", DEFAULT_TARGET_ACCOUNT).strip()
+    run_id = os.getenv("SERENITY_PIPELINE_RUN_ID", "").strip()
     try:
-        asyncio.run(
+        tweets, long_post_stats = asyncio.run(
             scrape_tweets(
                 auth_token=auth_token,
                 target_account=target_account,
@@ -230,7 +259,56 @@ def main() -> None:
             )
         )
     except Exception as error:
+        if run_id.isdigit():
+            connection = connect_db(DB_PATH)
+            try:
+                failure_kind, failure_code = _failure_details(error)
+                record_pipeline_issue(
+                    connection,
+                    int(run_id),
+                    stage="scraper",
+                    failure_kind=failure_kind,
+                    failure_code=failure_code,
+                    error_message=str(error),
+                )
+            finally:
+                connection.close()
         raise SystemExit(f"爬蟲失敗：{error}") from error
+
+    if run_id.isdigit():
+        connection = connect_db(DB_PATH)
+        try:
+            record_pipeline_scrape(
+                connection,
+                int(run_id),
+                scraped_count=len(tweets),
+                long_posts_attempted=long_post_stats["attempted"],
+                long_posts_succeeded=long_post_stats["succeeded"],
+                long_posts_failed=long_post_stats["failed"],
+                latest_source_timestamp=max(
+                    (tweet["timestamp"] for tweet in tweets),
+                    default=None,
+                ),
+            )
+            if long_post_stats["failed"]:
+                record_pipeline_issue(
+                    connection,
+                    int(run_id),
+                    stage="scraper",
+                    failure_kind="long_post_hydration",
+                    error_message=(
+                        f"{long_post_stats['failed']} 則長文補抓失敗，"
+                        "已保留列表頁文字"
+                    ),
+                )
+        finally:
+            connection.close()
+    return {
+        "scraped": len(tweets),
+        "long_attempted": long_post_stats["attempted"],
+        "long_succeeded": long_post_stats["succeeded"],
+        "long_failed": long_post_stats["failed"],
+    }
 
 
 if __name__ == "__main__":

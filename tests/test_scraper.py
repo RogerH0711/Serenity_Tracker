@@ -1,6 +1,6 @@
 import unittest
 
-from scraper import _extract_post
+from scraper import _extract_post, _failure_details
 
 
 class FakeTextElement:
@@ -44,6 +44,16 @@ class FakeArticle:
 
 
 class ScraperContextTest(unittest.IsolatedAsyncioTestCase):
+    def test_classifies_login_and_rate_limit_failures(self) -> None:
+        self.assertEqual(
+            _failure_details(RuntimeError("X_AUTH_TOKEN 已失效，頁面被導向登入流程")),
+            ("auth", None),
+        )
+        self.assertEqual(
+            _failure_details(RuntimeError("X 回傳 HTTP 429")),
+            ("rate_limit", 429),
+        )
+
     async def test_extracts_main_post_and_referenced_context_separately(self) -> None:
         post = await _extract_post(
             FakeArticle(
