@@ -1,6 +1,8 @@
 # Serenity Tracker
 
 Serenity Tracker 會定期抓取指定 X 帳號近期貼文，從明示的 cashtag（例如 `$NVDA`）提取半導體與 AI 供應鏈觀點，並生成不需要後端伺服器的靜態儀表板。
+<img width="2880" height="1624" alt="image" src="https://github.com/user-attachments/assets/c2b044ab-bb1a-42af-89bb-48c15b96f90c" />
+
 
 ## 設計重點
 
